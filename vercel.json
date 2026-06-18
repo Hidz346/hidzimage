@@ -1,6 +1,0 @@
-{
-  "version": 2,
-  "routes": [
-    { "src": "/(.*)", "dest": "/public/$1" }
-  ]
-}
