@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>HidzImage – Penjernih & HD Foto</title>
+  <link rel="icon" href="https://www.gobox.my.id/file/IcHjU.png" />
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<!-- ── NAVBAR ────────────────────────────── -->
+<header class="navbar">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <img src="https://www.gobox.my.id/file/IcHjU.png" alt="Logo" class="nav-logo" />
+      <span class="nav-name">HidzImage</span>
+      <span class="nav-tag">HD Enhancer</span>
+    </div>
+    <button class="dark-btn" id="darkBtn" aria-label="Toggle dark mode">
+      <svg id="iconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <svg id="iconSun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main>
+<div class="page">
+
+  <!-- ── STATE 0: UPLOAD ─────────────────── -->
+  <section id="sUpload">
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">🖼️</div>
+      <h2>Perjelas & Perbesar Foto</h2>
+      <p>Drag &amp; drop foto di sini, atau klik untuk memilih</p>
+      <p class="upload-hint">Mendukung JPG · PNG · WEBP · GIF</p>
+      <button class="btn btn-primary" style="margin-top:20px" id="uploadBtn">Pilih Foto</button>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" hidden />
+  </section>
+
+  <!-- ── STATE 1: EDITOR ─────────────────── -->
+  <section id="sEditor" class="editor-wrap hidden">
+
+    <!-- Preview -->
+    <div class="preview-card">
+      <img id="previewImg" src="" alt="Preview" />
+      <div class="preview-bar">
+        <span class="preview-name" id="previewName">—</span>
+        <button class="change-btn" id="changeBtn">Ganti Foto</button>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-card">
+      <h3>✦ Pengaturan Enhancement</h3>
+
+      <!-- Scale -->
+      <div class="slider-label" style="margin-bottom:8px;width:auto">Skala Pembesaran</div>
+      <div class="scale-group">
+        <button class="scale-opt" data-v="1">1× Only</button>
+        <button class="scale-opt active" data-v="2">2× HD</button>
+        <button class="scale-opt" data-v="4">4× Ultra</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Sharpen -->
+      <div class="slider-row">
+        <span class="slider-label">Ketajaman <span id="vSharpen">60</span></span>
+        <input type="range" id="sSharpen" min="0" max="100" value="60" />
+        <button class="slider-reset" data-target="sSharpen" data-default="60" title="Reset">↺</button>
+      </div>
+      <!-- Clarity -->
+      <div class="slider-row">
+        <span class="slider-label">Clarity <span id="vClarity">30</span></span>
+        <input type="range" id="sClarity" min="0" max="100" value="30" />
+        <button class="slider-reset" data-target="sClarity" data-default="30" title="Reset">↺</button>
+      </div>
+      <!-- Denoise -->
+      <div class="slider-row">
+        <span class="slider-label">Denoise <span id="vDenoise">0</span></span>
+        <input type="range" id="sDenoise" min="0" max="100" value="0" />
+        <button class="slider-reset" data-target="sDenoise" data-default="0" title="Reset">↺</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Brightness -->
+      <div class="slider-row">
+        <span class="slider-label">Kecerahan <span id="vBright">0</span></span>
+        <input type="range" id="sBright" min="-60" max="60" value="0" />
+        <button class="slider-reset" data-target="sBright" data-default="0" title="Reset">↺</button>
+      </div>
+      <!-- Contrast -->
+      <div class="slider-row">
+        <span class="slider-label">Kontras <span id="vContrast">10</span></span>
+        <input type="range" id="sContrast" min="-60" max="60" value="10" />
+        <button class="slider-reset" data-target="sContrast" data-default="10" title="Reset">↺</button>
+      </div>
+      <!-- Saturation -->
+      <div class="slider-row">
+        <span class="slider-label">Saturasi <span id="vSaturate">15</span></span>
+        <input type="range" id="sSaturate" min="-60" max="60" value="15" />
+        <button class="slider-reset" data-target="sSaturate" data-default="15" title="Reset">↺</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Process -->
+      <div class="process-section">
+        <button class="btn btn-primary btn-block" id="processBtn">
+          ✨ Proses Foto Sekarang
+        </button>
+        <p class="process-info">Semua proses berjalan di browser — privasi terjaga, tidak perlu internet</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── STATE 2: PROGRESS ───────────────── -->
+  <section id="sProgress" class="hidden">
+    <div class="progress-card">
+      <div class="spinner-lg"></div>
+      <div class="progress-title" id="progTitle">Memproses foto...</div>
+      <div class="progress-sub" id="progSub">Mohon tunggu sebentar</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progBar"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── STATE 3: RESULT ─────────────────── -->
+  <section id="sResult" class="hidden">
+    <div class="result-card">
+      <div class="result-header">
+        <h2>Foto Berhasil Diproses</h2>
+        <span class="result-badge">DONE</span>
+      </div>
+
+      <!-- Before / After comparison -->
+      <div class="comparison-wrap" id="cmpWrap">
+        <!-- Spacer sets the container height -->
+        <img class="comp-spacer" id="cmpSpacer" src="" alt="" />
+        <div class="comp-before">
+          <img id="cmpBefore" src="" alt="Original" />
+          <span class="comp-label">Original</span>
+        </div>
+        <div class="comp-after" id="cmpAfter">
+          <img id="cmpAfterImg" src="" alt="Enhanced" />
+          <span class="comp-label comp-label-right">Enhanced</span>
+        </div>
+        <div class="comp-handle" id="cmpHandle">
+          <div class="handle-line"></div>
+          <div class="handle-knob">⇔</div>
+        </div>
+      </div>
+      <p class="comp-hint">← Geser untuk membandingkan →</p>
+
+      <!-- Info chips -->
+      <div class="result-info" id="resultInfo"></div>
+
+      <!-- Actions -->
+      <div class="result-actions">
+        <button class="btn btn-success btn-block" id="downloadBtn">⬇ Download Foto HD</button>
+        <button class="btn btn-outline btn-block" id="editAgainBtn">✏️ Edit Lagi</button>
+        <button class="btn btn-ghost btn-block" id="newPhotoBtn">📷 Foto Baru</button>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /page -->
+</main>
+
+<footer><p>Dikembangkan oleh <strong>Hidz Forum</strong> · HidzImage HD Enhancer</p></footer>
+
+<!-- Dark mode (inline, runs immediately) -->
+<script>
+(function(){
+  const btn=document.getElementById('darkBtn');
+  const moon=document.getElementById('iconMoon');
+  const sun=document.getElementById('iconSun');
+  function apply(dark){
+    document.body.classList.toggle('dark',dark);
+    moon.classList.toggle('hidden',dark);
+    sun.classList.toggle('hidden',!dark);
+    localStorage.setItem('hidz_theme',dark?'dark':'light');
+  }
+  if(localStorage.getItem('hidz_theme')==='dark') apply(true);
+  btn.addEventListener('click',()=>apply(!document.body.classList.contains('dark')));
+})();
+</script>
+<script src="script.js"></script>
+</body>
+</html>
