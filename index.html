@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+  <title>HidzImage — HD Enhancer</title>
+  <link rel="icon" href="https://www.gobox.my.id/file/IcHjU.png"/>
+  <link rel="stylesheet" href="style.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+<!-- ── NAVBAR ──────────────────────────────── -->
+<header class="navbar">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <img src="https://www.gobox.my.id/file/IcHjU.png" alt="Logo" class="nav-logo"/>
+      <span class="nav-name">HIDZIMAGE</span>
+      <span class="nav-badge">✦ PHOTO TOOLS</span>
+    </div>
+    <button class="dark-btn" id="darkBtn" aria-label="Toggle dark mode">
+      <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <svg id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="hidden">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main>
+<div class="page">
+
+  <!-- ── TAB BAR ──────────────────────────── -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="enhance">✦ HD<br>ENHANCE</button>
+    <button class="tab-btn" data-tab="kompres">⚡ KOMPRES<br>UKURAN</button>
+    <button class="tab-btn" data-tab="dimensi">↔ UBAH<br>DIMENSI</button>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       TAB 1 — HD ENHANCE
+       ══════════════════════════════════════ -->
+  <div id="tabEnhance">
+
+    <!-- E-S0: Upload -->
+    <section id="eUpload">
+      <div class="upload-zone" id="eUploadZone">
+        <div class="upload-emoji">🖼️</div>
+        <h2>PERJELAS &amp; PERBESAR FOTO</h2>
+        <p>Drag &amp; drop foto di sini, atau klik untuk memilih</p>
+        <p class="upload-hint">JPG · PNG · WEBP · GIF</p>
+        <button class="btn-pick" id="eUploadBtn">↑ PILIH FOTO</button>
+      </div>
+      <input type="file" id="eFileInput" accept="image/*" hidden/>
+    </section>
+
+    <!-- E-S1: Editor -->
+    <section id="eEditor" class="editor-wrap hidden">
+      <div class="card preview-card">
+        <div class="preview-img-wrap">
+          <img id="ePreviewImg" src="" alt="Preview"/>
+        </div>
+        <div class="preview-bar">
+          <span class="fname" id="ePreviewName">—</span>
+          <button class="btn-change" id="eChangeBtn">↺ GANTI</button>
+        </div>
+      </div>
+      <div class="card controls-card">
+        <div class="sec-label">Pengaturan Enhancement</div>
+        <div class="group-label">skala pembesaran</div>
+        <div class="scale-group">
+          <button class="scale-opt" data-v="1">1× ONLY</button>
+          <button class="scale-opt active" data-v="2">2× HD</button>
+          <button class="scale-opt" data-v="4">4× ULTRA</button>
+        </div>
+        <div class="group-label">ketajaman &amp; noise</div>
+        <div class="slider-row">
+          <span class="slider-lbl">TAJAM <span id="vSharpen">60</span></span>
+          <input type="range" id="sSharpen" min="0" max="100" value="60"/>
+          <button class="btn-rst" data-t="sSharpen" data-d="60">↺</button>
+        </div>
+        <div class="slider-row">
+          <span class="slider-lbl">CLARITY <span id="vClarity">30</span></span>
+          <input type="range" id="sClarity" min="0" max="100" value="30"/>
+          <button class="btn-rst" data-t="sClarity" data-d="30">↺</button>
+        </div>
+        <div class="slider-row">
+          <span class="slider-lbl">DENOISE <span id="vDenoise">0</span></span>
+          <input type="range" id="sDenoise" min="0" max="100" value="0"/>
+          <button class="btn-rst" data-t="sDenoise" data-d="0">↺</button>
+        </div>
+        <div class="group-label">warna &amp; cahaya</div>
+        <div class="slider-row">
+          <span class="slider-lbl">TERANG <span id="vBright">0</span></span>
+          <input type="range" id="sBright" min="-60" max="60" value="0"/>
+          <button class="btn-rst" data-t="sBright" data-d="0">↺</button>
+        </div>
+        <div class="slider-row">
+          <span class="slider-lbl">KONTRAS <span id="vContrast">10</span></span>
+          <input type="range" id="sContrast" min="-60" max="60" value="10"/>
+          <button class="btn-rst" data-t="sContrast" data-d="10">↺</button>
+        </div>
+        <div class="slider-row">
+          <span class="slider-lbl">SATURASI <span id="vSaturate">15</span></span>
+          <input type="range" id="sSaturate" min="-60" max="60" value="15"/>
+          <button class="btn-rst" data-t="sSaturate" data-d="15">↺</button>
+        </div>
+        <div class="process-wrap">
+          <button class="btn btn-pink btn-block" id="eProcessBtn">✦ PROSES FOTO SEKARANG</button>
+          <p class="process-note">semua berjalan di browser — privasi terjaga</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- E-S2: Progress -->
+    <section id="eProgress" class="hidden">
+      <div class="card progress-card">
+        <div class="prog-emoji" id="eProgEmoji">⚙️</div>
+        <div class="prog-title" id="eProgTitle">MEMPROSES</div>
+        <div class="prog-sub"  id="eProgSub">mohon tunggu sebentar</div>
+        <div class="prog-bar-wrap"><div class="prog-bar" id="eProgBar"></div></div>
+      </div>
+    </section>
+
+    <!-- E-S3: Result -->
+    <section id="eResult" class="hidden">
+      <div class="card result-card">
+        <div class="result-head">
+          <h2>FOTO SELESAI DIPROSES</h2>
+          <span class="badge-done">✓ DONE</span>
+        </div>
+        <div class="cmp-wrap" id="eCmpWrap">
+          <img class="cmp-spacer" id="eCmpSpacer" src="" alt=""/>
+          <div class="cmp-layer cmp-before">
+            <img id="eCmpBefore" src="" alt="Original"/>
+            <span class="cmp-label">ORIGINAL</span>
+          </div>
+          <div class="cmp-layer cmp-after" id="eCmpAfter">
+            <img id="eCmpAfterImg" src="" alt="Enhanced"/>
+            <span class="cmp-label cmp-label-r">ENHANCED</span>
+          </div>
+          <div class="cmp-handle" id="eCmpHandle">
+            <div class="handle-line"></div>
+            <div class="handle-knob">⇔</div>
+          </div>
+        </div>
+        <p class="cmp-hint">← GESER UNTUK MEMBANDINGKAN →</p>
+        <div class="result-chips" id="eResultChips"></div>
+        <div class="result-actions">
+          <button class="btn btn-green  btn-block" id="eDownloadBtn">⬇ DOWNLOAD HD</button>
+          <button class="btn btn-cyan   btn-block" id="eEditAgainBtn">✏ EDIT LAGI</button>
+          <button class="btn btn-yellow btn-block" id="eNewBtn">📷 FOTO BARU</button>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /tabEnhance -->
+
+  <!-- ══════════════════════════════════════
+       TAB 2 — KOMPRES UKURAN FILE
+       ══════════════════════════════════════ -->
+  <div id="tabKompres" class="hidden">
+
+    <!-- K-S0: Upload -->
+    <section id="kUpload">
+      <div class="upload-zone" id="kUploadZone">
+        <div class="upload-emoji">📦</div>
+        <h2>KOMPRES UKURAN FOTO</h2>
+        <p>Ubah ukuran file bebas — MB ke KB atau KB ke MB</p>
+        <p class="upload-hint">JPG · PNG · WEBP</p>
+        <button class="btn-pick" id="kUploadBtn">↑ PILIH FOTO</button>
+      </div>
+      <input type="file" id="kFileInput" accept="image/*" hidden/>
+    </section>
+
+    <!-- K-S1: Settings -->
+    <section id="kSettings" class="hidden">
+      <div class="card">
+        <div class="file-info-bar">
+          <span class="fname" id="kFileName">—</span>
+          <span class="cur-size-badge" id="kCurSize">—</span>
+          <button class="btn-change" id="kChangeBtn">↺ GANTI</button>
+        </div>
+        <div class="controls-card">
+          <div class="sec-label">Target Ukuran File</div>
+          <div class="target-wrap">
+            <input type="number" class="target-num" id="kTargetVal"
+                   value="500" min="1" max="999999" inputmode="numeric"/>
+            <div class="unit-group">
+              <button class="unit-btn active" data-unit="KB" id="kUnitKB">KB</button>
+              <button class="unit-btn"        data-unit="MB" id="kUnitMB">MB</button>
+            </div>
+          </div>
+          <p class="process-note" id="kHint">ukuran saat ini: —</p>
+          <div class="process-wrap" style="margin-top:12px">
+            <button class="btn btn-pink btn-block" id="kProcessBtn">⚡ KOMPRES SEKARANG</button>
+            <p class="process-note">output: JPEG · proses di browser · tidak ada batas</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- K-S2: Progress -->
+    <section id="kProgress" class="hidden">
+      <div class="card progress-card">
+        <div class="prog-emoji" id="kProgEmoji">📦</div>
+        <div class="prog-title" id="kProgTitle">KOMPRES</div>
+        <div class="prog-sub"  id="kProgSub">mencari kualitas optimal</div>
+        <div class="prog-bar-wrap"><div class="prog-bar" id="kProgBar"></div></div>
+      </div>
+    </section>
+
+    <!-- K-S3: Result -->
+    <section id="kResult" class="hidden">
+      <div class="card result-card">
+        <div class="result-head">
+          <h2>FOTO BERHASIL DIKOMPRES</h2>
+          <span class="badge-done">✓ DONE</span>
+        </div>
+        <div class="size-compare" id="kSizeCompare"></div>
+        <div class="cmp-wrap" id="kCmpWrap">
+          <img class="cmp-spacer" id="kCmpSpacer" src="" alt=""/>
+          <div class="cmp-layer cmp-before">
+            <img id="kCmpBefore" src="" alt="Original"/>
+            <span class="cmp-label">ORIGINAL</span>
+          </div>
+          <div class="cmp-layer cmp-after" id="kCmpAfter">
+            <img id="kCmpAfterImg" src="" alt="Compressed"/>
+            <span class="cmp-label cmp-label-r">COMPRESSED</span>
+          </div>
+          <div class="cmp-handle" id="kCmpHandle">
+            <div class="handle-line"></div>
+            <div class="handle-knob">⇔</div>
+          </div>
+        </div>
+        <p class="cmp-hint">← GESER UNTUK MEMBANDINGKAN →</p>
+        <div class="result-chips" id="kResultChips"></div>
+        <div class="result-actions">
+          <button class="btn btn-green  btn-block" id="kDownloadBtn">⬇ DOWNLOAD</button>
+          <button class="btn btn-cyan   btn-block" id="kEditAgainBtn">✏ KOMPRES LAGI</button>
+          <button class="btn btn-yellow btn-block" id="kNewBtn">📷 FOTO BARU</button>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /tabKompres -->
+
+  <!-- ══════════════════════════════════════
+       TAB 3 — UBAH DIMENSI (px)
+       ══════════════════════════════════════ -->
+  <div id="tabDimensi" class="hidden">
+
+    <!-- D-S0: Upload -->
+    <section id="dUpload">
+      <div class="upload-zone" id="dUploadZone">
+        <div class="upload-emoji">↔️</div>
+        <h2>UBAH DIMENSI FOTO</h2>
+        <p>Tentukan lebar &amp; tinggi sesuka hati dalam piksel</p>
+        <p class="upload-hint">JPG · PNG · WEBP</p>
+        <button class="btn-pick" id="dUploadBtn">↑ PILIH FOTO</button>
+      </div>
+      <input type="file" id="dFileInput" accept="image/*" hidden/>
+    </section>
+
+    <!-- D-S1: Settings -->
+    <section id="dSettings" class="hidden">
+      <div class="card">
+        <div class="file-info-bar">
+          <span class="fname" id="dFileName">—</span>
+          <button class="btn-change" id="dChangeBtn">↺ GANTI</button>
+        </div>
+        <div class="controls-card">
+          <div class="sec-label">Dimensi Target</div>
+          <div class="dim-info" id="dOrigInfo">Dimensi asli: —</div>
+
+          <!-- Width × Height inputs with lock -->
+          <div class="dim-row">
+            <div class="dim-field">
+              <label>LEBAR (px)</label>
+              <input type="number" class="dim-input" id="dWidth"
+                     placeholder="800" min="1" max="8000" inputmode="numeric"/>
+            </div>
+            <button class="lock-btn active" id="dLockBtn" title="Kunci rasio aspek">🔒</button>
+            <div class="dim-field">
+              <label>TINGGI (px)</label>
+              <input type="number" class="dim-input" id="dHeight"
+                     placeholder="600" min="1" max="8000" inputmode="numeric"/>
+            </div>
+          </div>
+
+          <p class="process-note" style="margin-bottom:12px" id="dRatioNote">🔒 rasio aspek terkunci</p>
+
+          <div class="process-wrap" style="margin-top:4px">
+            <button class="btn btn-pink btn-block" id="dProcessBtn">↔ UBAH DIMENSI SEKARANG</button>
+            <p class="process-note">output: PNG · proses di browser · tidak ada batas</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- D-S2: Progress (instant but shown briefly) -->
+    <section id="dProgress" class="hidden">
+      <div class="card progress-card">
+        <div class="prog-emoji">↔️</div>
+        <div class="prog-title">MENGUBAH DIMENSI</div>
+        <div class="prog-sub">sebentar lagi selesai</div>
+        <div class="prog-bar-wrap"><div class="prog-bar" id="dProgBar" style="width:60%"></div></div>
+      </div>
+    </section>
+
+    <!-- D-S3: Result -->
+    <section id="dResult" class="hidden">
+      <div class="card result-card">
+        <div class="result-head">
+          <h2>DIMENSI BERHASIL DIUBAH</h2>
+          <span class="badge-done">✓ DONE</span>
+        </div>
+        <div class="dim-compare" id="dDimCompare"></div>
+        <div class="cmp-wrap" id="dCmpWrap">
+          <img class="cmp-spacer" id="dCmpSpacer" src="" alt=""/>
+          <div class="cmp-layer cmp-before">
+            <img id="dCmpBefore" src="" alt="Original"/>
+            <span class="cmp-label">ORIGINAL</span>
+          </div>
+          <div class="cmp-layer cmp-after" id="dCmpAfter">
+            <img id="dCmpAfterImg" src="" alt="Resized"/>
+            <span class="cmp-label cmp-label-r">RESIZED</span>
+          </div>
+          <div class="cmp-handle" id="dCmpHandle">
+            <div class="handle-line"></div>
+            <div class="handle-knob">⇔</div>
+          </div>
+        </div>
+        <p class="cmp-hint">← GESER UNTUK MEMBANDINGKAN →</p>
+        <div class="result-chips" id="dResultChips"></div>
+        <div class="result-actions">
+          <button class="btn btn-green  btn-block" id="dDownloadBtn">⬇ DOWNLOAD</button>
+          <button class="btn btn-cyan   btn-block" id="dEditAgainBtn">✏ UBAH LAGI</button>
+          <button class="btn btn-yellow btn-block" id="dNewBtn">📷 FOTO BARU</button>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /tabDimensi -->
+
+</div><!-- /page -->
+</main>
+
+<footer>DIKEMBANGKAN OLEH <strong>HIDZ FORUM</strong> · HIDZIMAGE PHOTO TOOLS</footer>
+
+<script>
+(function(){
+  var b=document.getElementById('darkBtn'),m=document.getElementById('iconMoon'),s=document.getElementById('iconSun');
+  function a(d){document.body.classList.toggle('dark',d);m.classList.toggle('hidden',d);s.classList.toggle('hidden',!d);localStorage.setItem('hidz_theme',d?'dark':'light');}
+  if(localStorage.getItem('hidz_theme')==='dark')a(true);
+  b.addEventListener('click',function(){a(!document.body.classList.contains('dark'));});
+})();
+</script>
+<script src="script.js"></script>
+</body>
+</html>
