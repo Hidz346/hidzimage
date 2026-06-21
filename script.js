@@ -90,6 +90,7 @@ const TABS = {
   enhance: $('tabEnhance'),
   kompres: $('tabKompres'),
   dimensi: $('tabDimensi'),
+  upload:  $('tabUpload'),
 };
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -625,4 +626,118 @@ $('dNewBtn').addEventListener('click',()=>{
   if(dOrigURL){URL.revokeObjectURL(dOrigURL);dOrigURL=null;}
   if(dBlobURL){URL.revokeObjectURL(dBlobURL);dBlobURL=null;}
   dShowOnly('dUpload');
+});
+
+
+/* ═══════════════════════════════════════════════
+   TAB 4 — UPLOAD KE LINK
+   Upload foto ke Catbox / Gobox via api-nanzz.my.id
+   ═══════════════════════════════════════════════ */
+
+const UPLOAD_APIS = {
+  catbox: 'https://api-nanzz.my.id/docs/api/uploader/catbox.php',
+  gobox:  'https://api-nanzz.my.id/docs/api/uploader/gobox.php',
+};
+
+let uFile=null, uProvider='catbox', uResultLink=null;
+
+function uShowOnly(id){
+  ['uUpload','uSettings','uProgress','uResult'].forEach(s=>$(s).classList.add('hidden'));
+  $(id).classList.remove('hidden');
+}
+
+/* Upload */
+$('uUploadBtn').addEventListener('click', e=>{e.stopPropagation(); $('uFileInput').click();});
+$('uUploadZone').addEventListener('click',  ()=>$('uFileInput').click());
+$('uChangeBtn').addEventListener('click',   ()=>$('uFileInput').click());
+$('uUploadZone').addEventListener('dragover',  e=>{e.preventDefault(); $('uUploadZone').classList.add('drag-over');});
+$('uUploadZone').addEventListener('dragleave', ()=>$('uUploadZone').classList.remove('drag-over'));
+$('uUploadZone').addEventListener('drop', e=>{
+  e.preventDefault(); $('uUploadZone').classList.remove('drag-over');
+  if(e.dataTransfer.files[0]) uLoad(e.dataTransfer.files[0]);
+});
+$('uFileInput').addEventListener('change', ()=>{ if($('uFileInput').files[0]) uLoad($('uFileInput').files[0]); });
+
+function uLoad(file){
+  if(!file.type.startsWith('image/')){ alert('Harap pilih file gambar.'); return; }
+  uFile=file;
+  $('uFileName').textContent=file.name+' · '+fmtSize(file.size);
+  uShowOnly('uSettings');
+}
+
+/* Provider select (Catbox / Gobox) */
+document.querySelectorAll('#uProviderGroup .scale-opt').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#uProviderGroup .scale-opt').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); uProvider=b.dataset.provider;
+}));
+
+/* Process — upload to chosen API */
+$('uProcessBtn').addEventListener('click', async()=>{
+  if(!uFile) return;
+  uShowOnly('uProgress');
+  $('uProgBar').style.width='25%';
+  $('uProgTitle').textContent='MENGUPLOAD';
+  $('uProgSub').textContent=`mengirim ke ${uProvider==='catbox'?'Catbox':'Gobox'}...`;
+  $('uProgEmoji').textContent='☁️';
+
+  try{
+    const link = await uUploadFile(uFile, uProvider);
+    uResultLink = link;
+    $('uProgBar').style.width='100%';
+    await sleep(150);
+
+    $('uResultChips').innerHTML=[
+      `<span class="chip chip-pink">${uProvider.toUpperCase()}</span>`,
+      `<span class="chip chip-plain">${fmtSize(uFile.size)}</span>`,
+      '<span class="chip chip-green">LINK SIAP ✓</span>',
+    ].join('');
+    $('uLinkText').textContent = link;
+    uShowOnly('uResult');
+  }catch(err){
+    alert('Gagal upload: '+err.message);
+    uShowOnly('uSettings');
+  }
+});
+
+/** POST file as multipart/form-data to the chosen uploader API and return its URL. */
+async function uUploadFile(file, provider){
+  const apiUrl = UPLOAD_APIS[provider];
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+
+  let res;
+  try{
+    res = await fetch(apiUrl, { method:'POST', body: fd });
+  }catch(e){
+    throw new Error('Tidak bisa terhubung ke server upload. Cek koneksi internet.');
+  }
+  if(!res.ok) throw new Error('Server merespons error (HTTP '+res.status+').');
+
+  let data;
+  try{ data = await res.json(); }
+  catch(e){ throw new Error('Respons server tidak valid.'); }
+
+  const link = data.Result_url || data.result_url || data.url || data.Url || data.Url_result;
+  if(data.Status===false || !link || !/^https?:\/\//i.test(link)){
+    throw new Error((typeof link==='string'&&link) || data.message || 'Upload gagal, coba lagi.');
+  }
+  return link;
+}
+
+$('uCopyBtn').addEventListener('click', async()=>{
+  if(!uResultLink) return;
+  try{
+    await navigator.clipboard.writeText(uResultLink);
+    $('uCopyBtn').textContent='✓ TERSALIN!';
+    setTimeout(()=>{ $('uCopyBtn').textContent='📋 SALIN LINK'; },1500);
+  }catch(e){
+    alert('Gagal menyalin otomatis. Salin manual:\n'+uResultLink);
+  }
+});
+$('uOpenBtn').addEventListener('click', ()=>{
+  if(uResultLink) window.open(uResultLink, '_blank');
+});
+$('uNewBtn').addEventListener('click', ()=>{
+  $('uFileInput').value=''; uFile=null; uResultLink=null;
+  uShowOnly('uUpload');
 });

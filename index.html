@@ -41,6 +41,7 @@
     <button class="tab-btn active" data-tab="enhance">✦ HD<br>ENHANCE</button>
     <button class="tab-btn" data-tab="kompres">⚡ KOMPRES<br>UKURAN</button>
     <button class="tab-btn" data-tab="dimensi">↔ UBAH<br>DIMENSI</button>
+    <button class="tab-btn" data-tab="upload">☁ UPLOAD<br>KE LINK</button>
   </div>
 
   <!-- ══════════════════════════════════════
@@ -348,6 +349,75 @@
     </section>
 
   </div><!-- /tabDimensi -->
+
+  <!-- ══════════════════════════════════════
+       TAB 4 — UPLOAD KE LINK
+       ══════════════════════════════════════ -->
+  <div id="tabUpload" class="hidden">
+
+    <!-- U-S0: Upload -->
+    <section id="uUpload">
+      <div class="upload-zone" id="uUploadZone">
+        <div class="upload-emoji">☁️</div>
+        <h2>UPLOAD FOTO KE LINK</h2>
+        <p>Dapat link permanen siap dibagikan kemana saja</p>
+        <p class="upload-hint">JPG · PNG · WEBP · GIF</p>
+        <button class="btn-pick" id="uUploadBtn">↑ PILIH FOTO</button>
+      </div>
+      <input type="file" id="uFileInput" accept="image/*" hidden/>
+    </section>
+
+    <!-- U-S1: Settings -->
+    <section id="uSettings" class="hidden">
+      <div class="card">
+        <div class="file-info-bar">
+          <span class="fname" id="uFileName">—</span>
+          <button class="btn-change" id="uChangeBtn">↺ GANTI</button>
+        </div>
+        <div class="controls-card">
+          <div class="sec-label">Pilih Layanan Upload</div>
+          <div class="scale-group" id="uProviderGroup">
+            <button class="scale-opt active" data-provider="catbox">📦 CATBOX</button>
+            <button class="scale-opt"        data-provider="gobox">🚀 GOBOX</button>
+          </div>
+          <div class="process-wrap">
+            <button class="btn btn-pink btn-block" id="uProcessBtn">☁ UPLOAD SEKARANG</button>
+            <p class="process-note">foto dikirim ke server eksternal untuk dapat link</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- U-S2: Progress -->
+    <section id="uProgress" class="hidden">
+      <div class="card progress-card">
+        <div class="prog-emoji" id="uProgEmoji">☁️</div>
+        <div class="prog-title" id="uProgTitle">MENGUPLOAD</div>
+        <div class="prog-sub"  id="uProgSub">mengirim foto ke server</div>
+        <div class="prog-bar-wrap"><div class="prog-bar" id="uProgBar"></div></div>
+      </div>
+    </section>
+
+    <!-- U-S3: Result -->
+    <section id="uResult" class="hidden">
+      <div class="card result-card">
+        <div class="result-head">
+          <h2>FOTO BERHASIL DIUPLOAD</h2>
+          <span class="badge-done">✓ DONE</span>
+        </div>
+        <div class="result-chips" id="uResultChips"></div>
+        <div class="link-box" id="uLinkBox">
+          <span id="uLinkText">—</span>
+        </div>
+        <div class="result-actions">
+          <button class="btn btn-green  btn-block" id="uCopyBtn">📋 SALIN LINK</button>
+          <button class="btn btn-cyan   btn-block" id="uOpenBtn">↗ BUKA LINK</button>
+          <button class="btn btn-yellow btn-block" id="uNewBtn">📷 FOTO BARU</button>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /tabUpload -->
 
 </div><!-- /page -->
 </main>

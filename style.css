@@ -357,3 +357,12 @@ footer{text-align:center;padding:24px 16px;border-top:var(--bw) solid var(--ink)
   font-family:'Space Mono',monospace;font-size:.65rem;letter-spacing:.06em;
   color:var(--text-2)}
 footer strong{color:var(--pink)}
+
+/* ════════════════════════════════════════════════
+   TAB 4 — UPLOAD KE LINK
+   ════════════════════════════════════════════════ */
+.link-box{padding:14px;margin-bottom:16px;
+  background:var(--surface-alt);border:var(--bw) solid var(--ink);
+  border-radius:var(--r);box-shadow:var(--shadow-sm);overflow:hidden}
+.link-box span{font-family:'Space Mono',monospace;font-size:.78rem;
+  color:var(--text);word-break:break-all;line-height:1.5}
