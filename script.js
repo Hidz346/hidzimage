@@ -631,15 +631,14 @@ $('dNewBtn').addEventListener('click',()=>{
 
 /* ═══════════════════════════════════════════════
    TAB 4 — UPLOAD KE LINK
-   Upload foto ke Catbox / Gobox via api-nanzz.my.id
+   Upload foto ke Gobox via api-nanzz.my.id
    ═══════════════════════════════════════════════ */
 
 const UPLOAD_APIS = {
-  catbox: 'https://api-nanzz.my.id/docs/api/uploader/catbox.php',
-  gobox:  'https://api-nanzz.my.id/docs/api/uploader/gobox.php',
+  gobox: 'https://api-nanzz.my.id/docs/api/uploader/gobox.php',
 };
 
-let uFile=null, uProvider='catbox', uResultLink=null;
+let uFile=null, uProvider='gobox', uResultLink=null;
 
 function uShowOnly(id){
   ['uUpload','uSettings','uProgress','uResult'].forEach(s=>$(s).classList.add('hidden'));
@@ -665,7 +664,7 @@ function uLoad(file){
   uShowOnly('uSettings');
 }
 
-/* Provider select (Catbox / Gobox) */
+/* Provider select (Gobox) */
 document.querySelectorAll('#uProviderGroup .scale-opt').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('#uProviderGroup .scale-opt').forEach(x=>x.classList.remove('active'));
   b.classList.add('active'); uProvider=b.dataset.provider;
@@ -677,7 +676,7 @@ $('uProcessBtn').addEventListener('click', async()=>{
   uShowOnly('uProgress');
   $('uProgBar').style.width='25%';
   $('uProgTitle').textContent='MENGUPLOAD';
-  $('uProgSub').textContent=`mengirim ke ${uProvider==='catbox'?'Catbox':'Gobox'}...`;
+  $('uProgSub').textContent='mengirim ke Gobox...';
   $('uProgEmoji').textContent='☁️';
 
   try{
