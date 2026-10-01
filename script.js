@@ -749,6 +749,11 @@ function uUploadFile(file, provider, onProgress){
 
 /* Process — upload */
 $('uProcessBtn').addEventListener('click', async()=>{
+  if (uProvider === 'uploadee') {
+    window.open('https://www.upload.ee/?lng=eng&page=uploadsimple', '_blank', 'noopener');
+    showAlert('Upload.ee dibuka di tab baru karena layanan ini tidak menyediakan API upload anonim yang terdokumentasi untuk integrasi langsung. Pilih file di uploader Upload.ee tersebut.', 'UPLOAD.EE');
+    return;
+  }
   if(!uFile) return;
   uShowOnly('uProgress');
   $('uProgBar').style.width='5%';
