@@ -661,9 +661,9 @@ $('dNewBtn').addEventListener('click',()=>{
 
 const UPLOAD_ENDPOINT  = '/api/upload';
 const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;   // batas body request fungsi serverless
-const UPLOAD_LABELS    = { gobox:'GOBOX', uguu:'UGUU', uploadee:'UPLOAD.EE' };
+const UPLOAD_LABELS    = { uguu:'UGUU' };
 
-let uFile=null, uProvider='gobox', uResultLink=null;
+let uFile=null, uProvider='uguu', uResultLink=null;
 
 function uShowOnly(id){
   ['uUpload','uSettings','uProgress','uResult'].forEach(s=>$(s).classList.add('hidden'));
