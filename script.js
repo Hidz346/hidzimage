@@ -792,32 +792,6 @@ async function uUploadFile(file, provider, onProgress){
   });
 }
 
-/** legacy comment marker retained for compatibility */
-function _uUploadFileLegacy(file,provider,onProgress){
-function uUploadFile(file, provider, onProgress){
-  return new Promise((resolve, reject)=>{
-    const xhr=new XMLHttpRequest();
-    xhr.open('POST', UPLOAD_ENDPOINT);
-    xhr.timeout=60000;
-    xhr.setRequestHeader('Content-Type','application/octet-stream');
-    xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
-    xhr.setRequestHeader('X-File-Type', file.type);
-    xhr.setRequestHeader('X-Provider', provider);
-
-    xhr.upload.onprogress=e=>{ if(e.lengthComputable) onProgress(e.loaded/e.total); };
-    xhr.onerror  =()=>reject(new Error('Tidak bisa terhubung ke server. Cek koneksi internet.'));
-    xhr.ontimeout=()=>reject(new Error('Upload terlalu lama. Coba lagi.'));
-    xhr.onload=()=>{
-      let data=null;
-      try{ data=JSON.parse(xhr.responseText); }catch(e){}
-      if(xhr.status===413) return reject(new Error('Ukuran foto terlalu besar.'));
-      if(xhr.status>=200&&xhr.status<300&&data&&data.url) return resolve(data.url);
-      reject(new Error((data&&data.error)||'Upload gagal (kode '+xhr.status+'). Coba lagi.'));
-    };
-    xhr.send(file);
-  });
-}
-
 /* Process — upload */
 $('uProcessBtn').addEventListener('click', async()=>{
   if (uProvider === 'uploadee') {
