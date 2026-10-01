@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+  <title>HidzImage — Video Tools</title>
+  <link rel="icon" href="https://www.gobox.my.id/file/IcHjU.png"/>
+  <link rel="stylesheet" href="style.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+<header class="navbar">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <img src="https://www.gobox.my.id/file/IcHjU.png" alt="Logo" class="nav-logo"/>
+      <span class="nav-name">HIDZIMAGE</span>
+      <span class="nav-badge">✦ VIDEO TOOLS</span>
+    </div>
+    <a class="nav-link" href="index.html">📷 FOTO</a>
+    <button class="dark-btn" id="darkBtn" aria-label="Toggle dark mode">
+      <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg id="iconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="hidden">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main>
+<div class="page">
+
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="enhance">✦ HD<br>ENHANCE</button>
+    <button class="tab-btn" data-tab="kompres">⚡ KOMPRES<br>UKURAN</button>
+    <button class="tab-btn" data-tab="dimensi">↔ UBAH<br>DIMENSI</button>
+    <button class="tab-btn" data-tab="upload">☁ UPLOAD<br>KE LINK</button>
+  </div>
+
+  <!-- Pilih video -->
+  <section id="vUpload">
+    <div class="upload-zone" id="vUploadZone">
+      <div class="upload-emoji">🎬</div>
+      <h2>PILIH VIDEO</h2>
+      <p>Drag &amp; drop video di sini, atau klik untuk memilih</p>
+      <p class="upload-hint">MP4 · WEBM · MOV</p>
+      <button class="btn-pick" id="vUploadBtn">↑ PILIH VIDEO</button>
+    </div>
+    <input type="file" id="vFileInput" accept="video/*" hidden/>
+  </section>
+
+  <!-- Pengaturan -->
+  <section id="vSettings" class="editor-wrap hidden">
+    <div class="card preview-card">
+      <div class="preview-img-wrap"><video id="vPreview" class="vid" controls playsinline muted></video></div>
+      <div class="preview-bar">
+        <span class="fname" id="vFileName">—</span>
+        <button class="btn-change" id="vChangeBtn">↺ GANTI</button>
+      </div>
+    </div>
+
+    <div class="card controls-card">
+      <!-- HD Enhance -->
+      <div id="pEnhance">
+        <div class="sec-label">Pengaturan Enhancement</div>
+        <div class="group-label">skala pembesaran</div>
+        <div class="scale-group" id="vScaleGroup">
+          <button class="scale-opt" data-v="1">1× ONLY</button>
+          <button class="scale-opt active" data-v="2">2× HD</button>
+          <button class="scale-opt" data-v="4">4× ULTRA</button>
+        </div>
+        <div class="group-label">ketajaman &amp; warna</div>
+        <div class="slider-row"><span class="slider-lbl">TAJAM <span id="vSharpenV">40</span></span>
+          <input type="range" id="vSharpen" min="0" max="100" value="40"/><button class="btn-rst" data-t="vSharpen" data-d="40">↺</button></div>
+        <div class="slider-row"><span class="slider-lbl">TERANG <span id="vBrightV">0</span></span>
+          <input type="range" id="vBright" min="-60" max="60" value="0"/><button class="btn-rst" data-t="vBright" data-d="0">↺</button></div>
+        <div class="slider-row"><span class="slider-lbl">KONTRAS <span id="vContrastV">10</span></span>
+          <input type="range" id="vContrast" min="-60" max="60" value="10"/><button class="btn-rst" data-t="vContrast" data-d="10">↺</button></div>
+        <div class="slider-row"><span class="slider-lbl">SATURASI <span id="vSaturateV">15</span></span>
+          <input type="range" id="vSaturate" min="-60" max="60" value="15"/><button class="btn-rst" data-t="vSaturate" data-d="15">↺</button></div>
+      </div>
+
+      <!-- Kompres -->
+      <div id="pKompres" class="hidden">
+        <div class="sec-label">Target Ukuran File</div>
+        <div class="target-wrap">
+          <input type="number" class="target-num" id="vTargetVal" value="5" min="1" max="999999" inputmode="numeric"/>
+          <div class="unit-group">
+            <button class="unit-btn" data-unit="KB" id="vUnitKB">KB</button>
+            <button class="unit-btn active" data-unit="MB" id="vUnitMB">MB</button>
+          </div>
+        </div>
+        <p class="process-note" id="vSizeHint">ukuran saat ini: —</p>
+      </div>
+
+      <!-- Dimensi -->
+      <div id="pDimensi" class="hidden">
+        <div class="sec-label">Dimensi Target</div>
+        <div class="dim-info" id="vDimInfo">Dimensi asli: —</div>
+        <div class="dim-row">
+          <div class="dim-field"><label>LEBAR (px)</label>
+            <input type="number" class="dim-input" id="vWidth" min="2" max="4096" inputmode="numeric"/></div>
+          <button class="lock-btn active" id="vLockBtn" title="Kunci rasio aspek">🔒</button>
+          <div class="dim-field"><label>TINGGI (px)</label>
+            <input type="number" class="dim-input" id="vHeight" min="2" max="4096" inputmode="numeric"/></div>
+        </div>
+        <p class="process-note" id="vRatioNote">🔒 rasio aspek terkunci</p>
+      </div>
+
+      <!-- Upload ke link -->
+      <div id="pUpload" class="hidden">
+        <div class="sec-label">Layanan Upload</div>
+        <div class="prov-group" id="vProviderGroup" role="radiogroup" aria-label="Layanan upload">
+          <button class="prov-opt active" data-provider="gobox" role="radio" aria-checked="true">
+            <span class="prov-head"><span class="prov-name">🚀 GOBOX</span><span class="prov-tag">STANDAR</span></span>
+            <span class="prov-desc">Pilihan utama untuk link yang mau dibagikan atau dipasang di website dan forum.</span>
+          </button>
+          <button class="prov-opt" data-provider="uguu" role="radio" aria-checked="false">
+            <span class="prov-head"><span class="prov-name">⏳ UGUU</span><span class="prov-tag">SEMENTARA</span></span>
+            <span class="prov-desc">Link hilang sendiri setelah beberapa waktu. Cocok untuk kirim video sekali pakai.</span>
+          </button>
+          <button class="prov-opt" data-provider="uploadee" role="radio" aria-checked="false">
+            <span class="prov-head"><span class="prov-name">📦 UPLOAD.EE</span><span class="prov-tag">CADANGAN</span></span>
+            <span class="prov-desc">Pakai kalau Gobox atau Uguu sedang bermasalah.</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="process-wrap">
+        <button class="btn btn-pink btn-block" id="vProcessBtn">✦ PROSES VIDEO SEKARANG</button>
+        <p class="process-note" id="vProcessNote">semua berjalan di browser — privasi terjaga</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Progress -->
+  <section id="vProgress" class="hidden">
+    <div class="card progress-card">
+      <div class="prog-emoji" id="vProgEmoji">⚙️</div>
+      <div class="prog-title" id="vProgTitle">MEMPROSES</div>
+      <div class="prog-sub" id="vProgSub">jangan tutup atau pindah tab browser</div>
+      <div class="prog-bar-wrap"><div class="prog-bar" id="vProgBar"></div></div>
+    </div>
+  </section>
+
+  <!-- Hasil -->
+  <section id="vResult" class="hidden">
+    <div class="card result-card">
+      <div class="result-head"><h2 id="vResultTitle">VIDEO SELESAI DIPROSES</h2><span class="badge-done">✓ DONE</span></div>
+      <div id="vOutWrap" class="cmp-wrap vid-out"><video id="vOut" class="vid" controls playsinline></video></div>
+      <div class="result-chips" id="vResultChips"></div>
+      <div class="link-box hidden" id="vLinkBox"><span id="vLinkText">—</span></div>
+      <div class="result-actions">
+        <button class="btn btn-green btn-block" id="vDownloadBtn">⬇ DOWNLOAD</button>
+        <button class="btn btn-green btn-block hidden" id="vCopyBtn">📋 SALIN LINK</button>
+        <button class="btn btn-cyan btn-block hidden" id="vOpenBtn">↗ BUKA LINK</button>
+        <button class="btn btn-cyan btn-block" id="vEditAgainBtn">✏ EDIT LAGI</button>
+        <button class="btn btn-yellow btn-block" id="vNewBtn">🎬 VIDEO BARU</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+</main>
+
+<div class="dlg hidden" id="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlgTitle" aria-describedby="dlgMsg">
+  <div class="dlg-box">
+    <div class="dlg-title" id="dlgTitle">PERHATIAN</div>
+    <p class="dlg-msg" id="dlgMsg"></p>
+    <button class="btn btn-pink btn-block" id="dlgOk">OKE</button>
+  </div>
+</div>
+
+<footer>DIKEMBANGKAN OLEH <strong>HIDZ FORUM</strong> · HIDZIMAGE VIDEO TOOLS</footer>
+
+<!-- Filter ketajaman untuk frame video (kernel diatur dari video.js) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <filter id="vSharpFilter" color-interpolation-filters="sRGB">
+    <feConvolveMatrix id="vSharpKernel" order="3" kernelMatrix="0 0 0 0 1 0 0 0 0" preserveAlpha="true"/>
+  </filter>
+</svg>
+
+<script>
+(function(){
+  var b=document.getElementById('darkBtn'),m=document.getElementById('iconMoon'),s=document.getElementById('iconSun');
+  function a(d){document.body.classList.toggle('dark',d);m.classList.toggle('hidden',d);s.classList.toggle('hidden',!d);localStorage.setItem('hidz_theme',d?'dark':'light');}
+  if(localStorage.getItem('hidz_theme')==='dark')a(true);
+  b.addEventListener('click',function(){a(!document.body.classList.contains('dark'));});
+})();
+</script>
+<script src="video.js"></script>
+</body>
+</html>

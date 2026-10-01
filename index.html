@@ -18,6 +18,7 @@
       <span class="nav-name">HIDZIMAGE</span>
       <span class="nav-badge">✦ PHOTO TOOLS</span>
     </div>
+    <a class="nav-link" href="video.html">🎬 VIDEO</a>
     <button class="dark-btn" id="darkBtn" aria-label="Toggle dark mode">
       <svg id="iconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -75,7 +76,7 @@
       <div class="card controls-card">
         <div class="sec-label">Pengaturan Enhancement</div>
         <div class="group-label">skala pembesaran</div>
-        <div class="scale-group">
+        <div class="scale-group" id="eScaleGroup">
           <button class="scale-opt" data-v="1">1× ONLY</button>
           <button class="scale-opt active" data-v="2">2× HD</button>
           <button class="scale-opt" data-v="4">4× ULTRA</button>
@@ -140,12 +141,12 @@
           <img class="cmp-spacer" id="eCmpSpacer" src="" alt=""/>
           <div class="cmp-layer cmp-before">
             <img id="eCmpBefore" src="" alt="Original"/>
-            <span class="cmp-label">ORIGINAL</span>
           </div>
           <div class="cmp-layer cmp-after" id="eCmpAfter">
             <img id="eCmpAfterImg" src="" alt="Enhanced"/>
-            <span class="cmp-label cmp-label-r">ENHANCED</span>
           </div>
+          <span class="cmp-label">ENHANCED</span>
+          <span class="cmp-label cmp-label-r">ORIGINAL</span>
           <div class="cmp-handle" id="eCmpHandle">
             <div class="handle-line"></div>
             <div class="handle-knob">⇔</div>
@@ -229,12 +230,12 @@
           <img class="cmp-spacer" id="kCmpSpacer" src="" alt=""/>
           <div class="cmp-layer cmp-before">
             <img id="kCmpBefore" src="" alt="Original"/>
-            <span class="cmp-label">ORIGINAL</span>
           </div>
           <div class="cmp-layer cmp-after" id="kCmpAfter">
             <img id="kCmpAfterImg" src="" alt="Compressed"/>
-            <span class="cmp-label cmp-label-r">COMPRESSED</span>
           </div>
+          <span class="cmp-label">COMPRESSED</span>
+          <span class="cmp-label cmp-label-r">ORIGINAL</span>
           <div class="cmp-handle" id="kCmpHandle">
             <div class="handle-line"></div>
             <div class="handle-knob">⇔</div>
@@ -327,12 +328,12 @@
           <img class="cmp-spacer" id="dCmpSpacer" src="" alt=""/>
           <div class="cmp-layer cmp-before">
             <img id="dCmpBefore" src="" alt="Original"/>
-            <span class="cmp-label">ORIGINAL</span>
           </div>
           <div class="cmp-layer cmp-after" id="dCmpAfter">
             <img id="dCmpAfterImg" src="" alt="Resized"/>
-            <span class="cmp-label cmp-label-r">RESIZED</span>
           </div>
+          <span class="cmp-label">RESIZED</span>
+          <span class="cmp-label cmp-label-r">ORIGINAL</span>
           <div class="cmp-handle" id="dCmpHandle">
             <div class="handle-line"></div>
             <div class="handle-knob">⇔</div>
@@ -360,7 +361,7 @@
       <div class="upload-zone" id="uUploadZone">
         <div class="upload-emoji">☁️</div>
         <h2>UPLOAD FOTO KE LINK</h2>
-        <p>Dapat link permanen siap dibagikan kemana saja</p>
+        <p>Dapat link foto siap dibagikan kemana saja</p>
         <p class="upload-hint">JPG · PNG · WEBP · GIF</p>
         <button class="btn-pick" id="uUploadBtn">↑ PILIH FOTO</button>
       </div>
@@ -376,12 +377,23 @@
         </div>
         <div class="controls-card">
           <div class="sec-label">Layanan Upload</div>
-          <div class="scale-group" id="uProviderGroup">
-            <button class="scale-opt active" data-provider="gobox">🚀 GOBOX</button>
+          <div class="prov-group" id="uProviderGroup" role="radiogroup" aria-label="Layanan upload">
+            <button class="prov-opt active" data-provider="gobox" role="radio" aria-checked="true">
+              <span class="prov-head"><span class="prov-name">🚀 GOBOX</span><span class="prov-tag">STANDAR</span></span>
+              <span class="prov-desc">Pilihan utama. Cocok kalau link mau dibagikan ke orang lain atau dipasang di website dan forum.</span>
+            </button>
+            <button class="prov-opt" data-provider="uguu" role="radio" aria-checked="false">
+              <span class="prov-head"><span class="prov-name">⏳ UGUU</span><span class="prov-tag">SEMENTARA</span></span>
+              <span class="prov-desc">Link akan hilang sendiri setelah beberapa waktu. Cocok untuk kirim foto sekali pakai, bukan untuk disimpan lama.</span>
+            </button>
+            <button class="prov-opt" data-provider="uploadee" role="radio" aria-checked="false">
+              <span class="prov-head"><span class="prov-name">📦 UPLOAD.EE</span><span class="prov-tag">CADANGAN</span></span>
+              <span class="prov-desc">Layanan hosting gambar dan file gratis. Pakai kalau Gobox atau Uguu sedang bermasalah.</span>
+            </button>
           </div>
           <div class="process-wrap">
             <button class="btn btn-pink btn-block" id="uProcessBtn">☁ UPLOAD SEKARANG</button>
-            <p class="process-note">foto dikirim ke server eksternal untuk dapat link</p>
+            <p class="process-note">foto dikirim ke server eksternal · di atas 4 MB dikecilkan otomatis</p>
           </div>
         </div>
       </div>
@@ -420,6 +432,15 @@
 
 </div><!-- /page -->
 </main>
+
+<!-- ── DIALOG PESAN ─────────────────────────── -->
+<div class="dlg hidden" id="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlgTitle" aria-describedby="dlgMsg">
+  <div class="dlg-box">
+    <div class="dlg-title" id="dlgTitle">PERHATIAN</div>
+    <p class="dlg-msg" id="dlgMsg"></p>
+    <button class="btn btn-pink btn-block" id="dlgOk">OKE</button>
+  </div>
+</div>
 
 <footer>DIKEMBANGKAN OLEH <strong>HIDZ FORUM</strong> · HIDZIMAGE PHOTO TOOLS</footer>
 

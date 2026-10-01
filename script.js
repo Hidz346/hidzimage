@@ -1,7 +1,8 @@
 /**
  * HidzImage v4 — script.js
- * Features: HD Enhance · Kompres Ukuran File · Ubah Dimensi Piksel
- * Semua fitur 100% client-side Canvas API — zero external API — zero error.
+ * Fitur: HD Enhance · Kompres Ukuran File · Ubah Dimensi Piksel · Upload ke Link
+ * Tiga fitur pertama berjalan penuh di browser (Canvas API).
+ * Upload ke Link lewat endpoint /api/upload (lihat api/upload.js).
  */
 
 'use strict';
@@ -20,6 +21,31 @@ function fmtSize(bytes) {
   if (bytes >= 1024)      return (bytes/1024).toFixed(0)+' KB';
   return bytes+' B';
 }
+
+/**
+ * Dialog pesan di dalam halaman, pengganti alert() bawaan browser.
+ * alert() native selalu menampilkan alamat situs di judulnya, jadi tidak dipakai.
+ */
+const dlg = { root: $('dlg'), title: $('dlgTitle'), msg: $('dlgMsg'), ok: $('dlgOk') };
+let dlgReturnFocus = null;
+
+function showAlert(message, title = 'PERHATIAN') {
+  dlg.title.textContent = title;
+  dlg.msg.textContent = message;
+  dlgReturnFocus = document.activeElement;
+  dlg.root.classList.remove('hidden');
+  dlg.ok.focus();
+}
+function closeAlert() {
+  dlg.root.classList.add('hidden');
+  if (dlgReturnFocus && dlgReturnFocus.focus) dlgReturnFocus.focus();
+  dlgReturnFocus = null;
+}
+dlg.ok.addEventListener('click', closeAlert);
+dlg.root.addEventListener('click', e => { if (e.target === dlg.root) closeAlert(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !dlg.root.classList.contains('hidden')) closeAlert();
+});
 
 /** Load Image element from URL */
 function loadImg(src) {
@@ -126,7 +152,7 @@ $('eUploadZone').addEventListener('drop', e=>{
 $('eFileInput').addEventListener('change', ()=>{ if($('eFileInput').files[0]) eLoad($('eFileInput').files[0]); });
 
 function eLoad(file) {
-  if(!file.type.startsWith('image/')){ alert('Harap pilih file gambar.'); return; }
+  if(!file.type.startsWith('image/')){ showAlert('Harap pilih file gambar.'); return; }
   if(eOrigURL) URL.revokeObjectURL(eOrigURL);
   eFile=file; eOrigURL=URL.createObjectURL(file);
   $('ePreviewImg').src=eOrigURL;
@@ -136,8 +162,8 @@ function eLoad(file) {
 }
 
 /* Scale */
-document.querySelectorAll('.scale-opt').forEach(b=>b.addEventListener('click',()=>{
-  document.querySelectorAll('.scale-opt').forEach(x=>x.classList.remove('active'));
+document.querySelectorAll('#eScaleGroup .scale-opt').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#eScaleGroup .scale-opt').forEach(x=>x.classList.remove('active'));
   b.classList.add('active'); eScale=parseInt(b.dataset.v);
 }));
 
@@ -194,7 +220,7 @@ $('eProcessBtn').addEventListener('click', async()=>{
     ].join('');
     eShowOnly('eResult');
     initCmp('eCmpWrap','eCmpAfter','eCmpHandle');
-  } catch(err){ alert('Gagal: '+err.message); eShowOnly('eEditor'); }
+  } catch(err){ showAlert(err.message, 'GAGAL MEMPERJELAS'); eShowOnly('eEditor'); }
 });
 
 $('eDownloadBtn').addEventListener('click', ()=>{
@@ -303,7 +329,7 @@ $('kUploadZone').addEventListener('drop', e=>{
 $('kFileInput').addEventListener('change',()=>{if($('kFileInput').files[0]) kLoad($('kFileInput').files[0]);});
 
 function kLoad(file){
-  if(!file.type.startsWith('image/')){alert('Harap pilih file gambar.');return;}
+  if(!file.type.startsWith('image/')){showAlert('Harap pilih file gambar.');return;}
   if(kOrigURL) URL.revokeObjectURL(kOrigURL);
   kFile=file; kOrigURL=URL.createObjectURL(file);
   $('kFileName').textContent=file.name;
@@ -328,9 +354,9 @@ $('kUnitMB').addEventListener('click',()=>{
 $('kProcessBtn').addEventListener('click', async()=>{
   if(!kFile) return;
   const raw=parseFloat($('kTargetVal').value);
-  if(!raw||raw<=0){alert('Masukkan target ukuran yang valid (angka lebih dari 0).');return;}
+  if(!raw||raw<=0){showAlert('Masukkan target ukuran yang valid (angka lebih dari 0).');return;}
   const targetBytes=kUnit==='MB' ? raw*1024*1024 : raw*1024;
-  if(targetBytes<100){alert('Target minimal 0.1 KB.');return;}
+  if(targetBytes<100){showAlert('Target minimal 0.1 KB.');return;}
 
   kShowOnly('kProgress');
 
@@ -369,7 +395,6 @@ $('kProcessBtn').addEventListener('click', async()=>{
     $('kCmpAfterImg').src=kBlobURL;
     $('kCmpAfter').style.clipPath='inset(0 50% 0 0)';
 
-    const dimChanged=(finalW!==undefined&&(finalW!==kFile.naturalWidth));
     $('kResultChips').innerHTML=[
       `<span class="chip chip-pink">TARGET ${raw} ${kUnit}</span>`,
       `<span class="chip chip-green">HASIL ${fmtSize(resSize)}</span>`,
@@ -378,7 +403,7 @@ $('kProcessBtn').addEventListener('click', async()=>{
 
     kShowOnly('kResult');
     initCmp('kCmpWrap','kCmpAfter','kCmpHandle');
-  }catch(err){alert('Gagal kompres: '+err.message);kShowOnly('kSettings');}
+  }catch(err){showAlert(err.message,'GAGAL KOMPRES');kShowOnly('kSettings');}
 });
 
 $('kDownloadBtn').addEventListener('click',()=>{
@@ -520,7 +545,7 @@ $('dUploadZone').addEventListener('drop', e=>{
 $('dFileInput').addEventListener('change',()=>{if($('dFileInput').files[0]) dLoad($('dFileInput').files[0]);});
 
 function dLoad(file){
-  if(!file.type.startsWith('image/')){alert('Harap pilih file gambar.');return;}
+  if(!file.type.startsWith('image/')){showAlert('Harap pilih file gambar.');return;}
   if(dOrigURL) URL.revokeObjectURL(dOrigURL);
   dFile=file; dOrigURL=URL.createObjectURL(file);
   const img=new Image();
@@ -533,7 +558,7 @@ function dLoad(file){
     $('dHeight').value=dOrigH;
     dShowOnly('dSettings');
   };
-  img.onerror=()=>alert('Gagal membaca dimensi gambar.');
+  img.onerror=()=>showAlert('Gagal membaca dimensi gambar.');
   img.src=dOrigURL;
 }
 
@@ -560,7 +585,7 @@ $('dProcessBtn').addEventListener('click', async()=>{
   const tw=parseInt($('dWidth').value)||0;
   const th=parseInt($('dHeight').value)||0;
   if(tw<1||th<1||tw>8000||th>8000){
-    alert('Masukkan dimensi valid: antara 1 dan 8000 piksel untuk lebar dan tinggi.');
+    showAlert('Masukkan dimensi valid: antara 1 dan 8000 piksel untuk lebar dan tinggi.');
     return;
   }
 
@@ -612,7 +637,7 @@ $('dProcessBtn').addEventListener('click', async()=>{
 
     dShowOnly('dResult');
     initCmp('dCmpWrap','dCmpAfter','dCmpHandle');
-  }catch(err){alert('Gagal ubah dimensi: '+err.message);dShowOnly('dSettings');}
+  }catch(err){showAlert(err.message,'GAGAL UBAH DIMENSI');dShowOnly('dSettings');}
 });
 
 $('dDownloadBtn').addEventListener('click',()=>{
@@ -631,12 +656,12 @@ $('dNewBtn').addEventListener('click',()=>{
 
 /* ═══════════════════════════════════════════════
    TAB 4 — UPLOAD KE LINK
-   Upload foto ke Gobox via api-nanzz.my.id
+   Upload foto ke Gobox / Uguu / Upload.ee lewat proxy /api/upload
    ═══════════════════════════════════════════════ */
 
-const UPLOAD_APIS = {
-  gobox: 'https://api-nanzz.my.id/docs/api/uploader/gobox.php',
-};
+const UPLOAD_ENDPOINT  = '/api/upload';
+const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;   // batas body request fungsi serverless
+const UPLOAD_LABELS    = { gobox:'GOBOX', uguu:'UGUU', uploadee:'UPLOAD.EE' };
 
 let uFile=null, uProvider='gobox', uResultLink=null;
 
@@ -658,70 +683,102 @@ $('uUploadZone').addEventListener('drop', e=>{
 $('uFileInput').addEventListener('change', ()=>{ if($('uFileInput').files[0]) uLoad($('uFileInput').files[0]); });
 
 function uLoad(file){
-  if(!file.type.startsWith('image/')){ alert('Harap pilih file gambar.'); return; }
+  if(!file.type.startsWith('image/')){ showAlert('Harap pilih file gambar.'); return; }
   uFile=file;
   $('uFileName').textContent=file.name+' · '+fmtSize(file.size);
   uShowOnly('uSettings');
 }
 
-/* Provider select (Gobox) */
-document.querySelectorAll('#uProviderGroup .scale-opt').forEach(b=>b.addEventListener('click',()=>{
-  document.querySelectorAll('#uProviderGroup .scale-opt').forEach(x=>x.classList.remove('active'));
-  b.classList.add('active'); uProvider=b.dataset.provider;
+/* Pilih layanan upload */
+const uProviderBtns=document.querySelectorAll('#uProviderGroup .prov-opt');
+uProviderBtns.forEach(b=>b.addEventListener('click',()=>{
+  uProviderBtns.forEach(x=>{
+    const on=x===b;
+    x.classList.toggle('active',on);
+    x.setAttribute('aria-checked',on);
+  });
+  uProvider=b.dataset.provider;
 }));
 
-/* Process — upload to chosen API */
+/** Foto yang melebihi batas request dikecilkan dulu (JPEG) supaya tidak ditolak server. */
+async function uFitForUpload(file){
+  if(file.size<=UPLOAD_MAX_BYTES) return file;
+  if(file.type==='image/gif') throw new Error('GIF di atas 4 MB tidak bisa diupload. Kecilkan dulu ukurannya.');
+
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await loadImg(url);
+    let scale=1;
+    for(let i=0;i<8;i++){
+      for(const q of [0.92,0.85,0.75]){
+        const blob=await makeBlob(img,img.naturalWidth*scale,img.naturalHeight*scale,'image/jpeg',q);
+        if(blob.size>0&&blob.size<=UPLOAD_MAX_BYTES){
+          return new File([blob], file.name.replace(/\.[^.]+$/,'')+'.jpg', {type:'image/jpeg'});
+        }
+      }
+      scale*=0.8;
+    }
+  }finally{ URL.revokeObjectURL(url); }
+  throw new Error('Foto terlalu besar untuk diupload.');
+}
+
+/** Kirim file ke /api/upload, kembalikan URL hasil. onProgress menerima 0..1. */
+function uUploadFile(file, provider, onProgress){
+  return new Promise((resolve, reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST', UPLOAD_ENDPOINT);
+    xhr.timeout=60000;
+    xhr.setRequestHeader('Content-Type','application/octet-stream');
+    xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
+    xhr.setRequestHeader('X-File-Type', file.type);
+    xhr.setRequestHeader('X-Provider', provider);
+
+    xhr.upload.onprogress=e=>{ if(e.lengthComputable) onProgress(e.loaded/e.total); };
+    xhr.onerror  =()=>reject(new Error('Tidak bisa terhubung ke server. Cek koneksi internet.'));
+    xhr.ontimeout=()=>reject(new Error('Upload terlalu lama. Coba lagi.'));
+    xhr.onload=()=>{
+      let data=null;
+      try{ data=JSON.parse(xhr.responseText); }catch(e){}
+      if(xhr.status===413) return reject(new Error('Ukuran foto terlalu besar.'));
+      if(xhr.status>=200&&xhr.status<300&&data&&data.url) return resolve(data.url);
+      reject(new Error((data&&data.error)||'Upload gagal (kode '+xhr.status+'). Coba lagi.'));
+    };
+    xhr.send(file);
+  });
+}
+
+/* Process — upload */
 $('uProcessBtn').addEventListener('click', async()=>{
   if(!uFile) return;
   uShowOnly('uProgress');
-  $('uProgBar').style.width='25%';
+  $('uProgBar').style.width='5%';
   $('uProgTitle').textContent='MENGUPLOAD';
-  $('uProgSub').textContent='mengirim ke Gobox...';
+  $('uProgSub').textContent='menyiapkan foto...';
   $('uProgEmoji').textContent='☁️';
 
   try{
-    const link = await uUploadFile(uFile, uProvider);
-    uResultLink = link;
+    const payload=await uFitForUpload(uFile);
+    $('uProgSub').textContent='mengirim ke '+UPLOAD_LABELS[uProvider]+'...';
+    const link=await uUploadFile(payload, uProvider, frac=>{
+      $('uProgBar').style.width=(10+frac*85)+'%';
+    });
+    uResultLink=link;
     $('uProgBar').style.width='100%';
     await sleep(150);
 
     $('uResultChips').innerHTML=[
-      `<span class="chip chip-pink">${uProvider.toUpperCase()}</span>`,
-      `<span class="chip chip-plain">${fmtSize(uFile.size)}</span>`,
+      `<span class="chip chip-pink">${UPLOAD_LABELS[uProvider]}</span>`,
+      `<span class="chip chip-plain">${fmtSize(payload.size)}</span>`,
+      payload!==uFile?'<span class="chip chip-plain">DIKECILKAN</span>':'',
       '<span class="chip chip-green">LINK SIAP ✓</span>',
     ].join('');
-    $('uLinkText').textContent = link;
+    $('uLinkText').textContent=link;
     uShowOnly('uResult');
   }catch(err){
-    alert('Gagal upload: '+err.message);
+    showAlert(err.message, 'GAGAL UPLOAD');
     uShowOnly('uSettings');
   }
 });
-
-/** POST file as multipart/form-data to the chosen uploader API and return its URL. */
-async function uUploadFile(file, provider){
-  const apiUrl = UPLOAD_APIS[provider];
-  const fd = new FormData();
-  fd.append('file', file, file.name);
-
-  let res;
-  try{
-    res = await fetch(apiUrl, { method:'POST', body: fd });
-  }catch(e){
-    throw new Error('Tidak bisa terhubung ke server upload. Cek koneksi internet.');
-  }
-  if(!res.ok) throw new Error('Server merespons error (HTTP '+res.status+').');
-
-  let data;
-  try{ data = await res.json(); }
-  catch(e){ throw new Error('Respons server tidak valid.'); }
-
-  const link = data.Result_url || data.result_url || data.url || data.Url || data.Url_result;
-  if(data.Status===false || !link || !/^https?:\/\//i.test(link)){
-    throw new Error((typeof link==='string'&&link) || data.message || 'Upload gagal, coba lagi.');
-  }
-  return link;
-}
 
 $('uCopyBtn').addEventListener('click', async()=>{
   if(!uResultLink) return;
@@ -730,7 +787,7 @@ $('uCopyBtn').addEventListener('click', async()=>{
     $('uCopyBtn').textContent='✓ TERSALIN!';
     setTimeout(()=>{ $('uCopyBtn').textContent='📋 SALIN LINK'; },1500);
   }catch(e){
-    alert('Gagal menyalin otomatis. Salin manual:\n'+uResultLink);
+    showAlert(uResultLink, 'SALIN MANUAL');
   }
 });
 $('uOpenBtn').addEventListener('click', ()=>{

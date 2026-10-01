@@ -1,6 +1,6 @@
 /* ════════════════════════════════════════════════
    HidzImage v4 — Neobrutalism + Y2K
-   3 Features: HD Enhance · Kompres Ukuran · Ubah Dimensi
+   4 Fitur: HD Enhance · Kompres Ukuran · Ubah Dimensi · Upload ke Link
    ════════════════════════════════════════════════ */
 
 /* ── RESET ─────────────────────────────────────── */
@@ -366,3 +366,61 @@ footer strong{color:var(--pink)}
   border-radius:var(--r);box-shadow:var(--shadow-sm);overflow:hidden}
 .link-box span{font-family:'Space Mono',monospace;font-size:.78rem;
   color:var(--text);word-break:break-all;line-height:1.5}
+
+/* Pilihan layanan upload */
+.prov-group{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+.prov-opt{display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;
+  padding:12px 14px;background:var(--surface-alt);color:var(--text);
+  border:var(--bw) solid var(--ink);box-shadow:var(--shadow-sm);border-radius:var(--r);
+  transition:transform .1s,box-shadow .1s,background .1s}
+.prov-opt:hover:not(.active){transform:translate(-1px,-1px);box-shadow:var(--shadow)}
+.prov-opt:active{transform:translate(2px,2px);box-shadow:none}
+.prov-opt.active{background:var(--ink);color:var(--surface);transform:translate(2px,2px);box-shadow:none}
+.prov-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.prov-name{font-family:'Space Mono',monospace;font-weight:700;font-size:.8rem;
+  letter-spacing:.04em}
+.prov-opt.active .prov-name{color:var(--yellow)}
+.prov-tag{font-family:'Space Mono',monospace;font-weight:700;font-size:.58rem;
+  letter-spacing:.08em;padding:2px 7px;border:1.5px solid var(--ink);
+  border-radius:var(--r);background:var(--cyan);color:#0A0A0A;flex-shrink:0}
+.prov-opt:nth-child(2) .prov-tag{background:var(--orange)}
+.prov-opt:nth-child(3) .prov-tag{background:var(--green)}
+.prov-desc{font-size:.8rem;line-height:1.45;color:var(--text-2)}
+.prov-opt.active .prov-desc{color:var(--surface-alt)}
+
+/* ── DIALOG PESAN ────────────────────────────────── */
+.dlg{position:fixed;inset:0;z-index:300;display:flex;align-items:center;
+  justify-content:center;padding:20px;background:rgba(10,10,10,.55)}
+.dlg-box{width:100%;max-width:340px;background:var(--surface);
+  border:var(--bw) solid var(--ink);box-shadow:var(--shadow-lg);
+  border-radius:var(--r);padding:20px 18px 18px}
+.dlg-title{display:flex;align-items:center;gap:8px;margin-bottom:12px;
+  font-family:'Orbitron',monospace;font-weight:900;font-size:.82rem;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--text)}
+.dlg-title::before{content:'';width:10px;height:10px;flex-shrink:0;
+  background:var(--pink);border:1.5px solid var(--ink);border-radius:2px}
+.dlg-msg{margin-bottom:18px;font-size:.92rem;line-height:1.5;color:var(--text);
+  white-space:pre-line;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text}
+
+/* ── DARK MODE: PERBAIKAN KONTRAS ─────────────────
+   --ink berubah putih di dark mode, jadi teks kuning di atas --ink
+   tidak terbaca, dan teks --ink di atas upload zone kuning hilang. */
+body.dark .tab-btn.active,
+body.dark .scale-opt.active,
+body.dark .btn-pick,
+body.dark .cmp-label:not(.cmp-label-r),
+body.dark .prov-opt.active .prov-name{color:var(--bg)}
+body.dark .upload-zone h2,
+body.dark .upload-zone p{color:#0A0A0A}
+
+/* ════════════════════════════════════════════════
+   VERSI VIDEO (video.html)
+   ════════════════════════════════════════════════ */
+.nav-link{margin-left:auto;font-family:'Space Mono',monospace;font-size:.7rem;font-weight:700;
+  letter-spacing:.06em;text-decoration:none;color:var(--ink);background:var(--cyan);
+  padding:9px 12px;border:var(--bw) solid var(--ink);box-shadow:var(--shadow-sm);
+  border-radius:var(--r);white-space:nowrap;transition:transform .1s,box-shadow .1s}
+.nav-link:hover{transform:translate(-1px,-1px);box-shadow:var(--shadow)}
+.nav-link:active{transform:translate(2px,2px);box-shadow:none}
+.vid{width:100%;max-height:260px;background:#000;object-fit:contain}
+.vid-out{cursor:default;touch-action:auto}
