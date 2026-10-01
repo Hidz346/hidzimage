@@ -53,15 +53,30 @@ async function readBody(req) {
   return Buffer.concat(chunks);
 }
 
+function normalizeLink(value) {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (isUrl(trimmed)) return trimmed;
+  if (/^\/?file\/[A-Za-z0-9._-]+$/i.test(trimmed)) {
+    return 'https://www.gobox.my.id/' + trimmed.replace(/^\/+/, '');
+  }
+  if (/^\/[^\s"'<>]+$/.test(trimmed)) {
+    return 'https://www.gobox.my.id' + trimmed;
+  }
+  return null;
+}
+
 function findLink(node, depth = 0) {
-  if (isUrl(node)) return node.trim();
-  if (!node || typeof node !== 'object' || depth > 6) return null;
+  const direct = normalizeLink(node);
+  if (direct) return direct;
+  if (!node || typeof node !== 'object' || depth > 8) return null;
 
   for (const key of [
     'url', 'Url', 'link', 'Link', 'Result_url', 'result_url',
     'downloadUrl', 'download_url', 'fileUrl', 'file_url'
   ]) {
-    if (isUrl(node[key])) return node[key].trim();
+    const normalized = normalizeLink(node[key]);
+    if (normalized) return normalized;
   }
 
   for (const value of Object.values(node)) {
@@ -69,6 +84,15 @@ function findLink(node, depth = 0) {
     if (found) return found;
   }
 
+  return null;
+}
+
+function findTextLink(text) {
+  if (!text || typeof text !== 'string') return null;
+  const absolute = text.match(/https?:\/\/[^\s"'<>]+/i);
+  if (absolute && isUrl(absolute[0])) return absolute[0].replace(/[),.;]+$/, '');
+  const relative = text.match(/(?:^|["'\\s])(\/file\/[A-Za-z0-9._-]+)(?:["'\\s]|$)/i);
+  if (relative) return 'https://www.gobox.my.id' + relative[1];
   return null;
 }
 
@@ -204,6 +228,7 @@ module.exports = async function handler(req, res) {
 
   const link =
     findLink(data) ||
+    findTextLink(responseText) ||
     (isUrl(responseText) ? responseText.trim() : null);
 
   if (!link) {
