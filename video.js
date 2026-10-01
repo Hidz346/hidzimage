@@ -56,10 +56,10 @@ const TABS = {
   enhance: { panel: 'pEnhance', label: '✦ PROSES VIDEO SEKARANG', note: 'semua berjalan di browser — privasi terjaga' },
   kompres: { panel: 'pKompres', label: '⚡ KOMPRES SEKARANG',     note: 'output sesuai dukungan browser · hasil mendekati target' },
   dimensi: { panel: 'pDimensi', label: '↔ UBAH DIMENSI SEKARANG', note: 'output sesuai dukungan browser · proses di browser' },
-  upload:  { panel: 'pUpload',  label: '☁ UPLOAD SEKARANG',       note: 'video diupload langsung ke File.io/UGUU · tidak melewati /api/upload' },
+  upload:  { panel: 'pUpload',  label: '☁ UPLOAD SEKARANG',       note: 'GOBOX melalui HidzImage · maksimal 4 MB per file' },
 };
 const STAGES = ['vUpload', 'vSettings', 'vProgress', 'vResult'];
-const UPLOAD_LABELS = { gobox: 'GOBOX', uguu: 'UGUU', uploadee: 'UPLOAD.EE' };
+const UPLOAD_LABELS = { gobox: 'GOBOX', uguu: 'UGUU', uploader: 'UPLOADER' };
 const VIDEO_UPLOAD_APIS = {
   gobox: '/api/upload',
   uguu: 'https://uguu.se/upload',
@@ -84,6 +84,7 @@ function setTab(key) {
   Object.entries(TABS).forEach(([k, t]) => $(t.panel).classList.toggle('hidden', k !== key));
   $('vProcessBtn').textContent = TABS[key].label;
   $('vProcessNote').textContent = TABS[key].note;
+  updateVideoProviderView();
   if (state.busy) return;
   showStage(state.file ? 'vSettings' : 'vUpload');
 }
@@ -204,15 +205,17 @@ $('vLockBtn').addEventListener('click', () => {
 /* Upload */
 const providerBtns = document.querySelectorAll('#vProviderGroup .prov-opt');
 function updateVideoProviderView(){
-  const external=$('vUploadEeWrap');
+  const external=$('vUploaderWrap');
   const button=$('vProcessBtn');
   const note=$('vProcessNote');
   if(!external||!button||!note)return;
-  const externalMode=state.provider==='uploadee';
+  const onUploadTab=state.tab==='upload';
+  const externalMode=onUploadTab&&state.provider==='uploader';
   external.classList.toggle('hidden',!externalMode);
   button.classList.toggle('hidden',externalMode);
+  if(!onUploadTab)return;
   note.textContent=externalMode
-    ? 'UPLOAD.EE langsung di panel · maksimal 100 MB anonim'
+    ? 'UPLOADER langsung di panel · maksimal 100 MB anonim'
     : state.provider==='uguu'
       ? 'UGUU langsung · maksimal 128 MiB per file · sekitar 3 jam'
       : 'GOBOX melalui HidzImage · maksimal 4 MB per file';
@@ -409,9 +412,9 @@ const runners = {
   },
 
   async upload() {
-    if(state.provider==='uploadee'){
+    if(state.provider==='uploader'){
       updateVideoProviderView();
-      throw new Error('UPLOAD.EE diproses langsung melalui uploader resmi di panel.');
+      throw new Error('UPLOADER diproses langsung lewat form di panel.');
     }
     let payload=state.file, shrunk=false;
     if(state.provider==='gobox' && payload.size>UPLOAD_MAX_BYTES){
@@ -438,9 +441,9 @@ const runners = {
   }
 };
 
-/** Upload video ke Gobox atau Uguu; Upload.ee memakai iframe resmi. */
+/** Upload video ke Gobox atau Uguu; UPLOADER memakai form resmi di panel. */
 function uploadFile(file,provider,onProgress){
-  if(provider==='uploadee')return Promise.reject(new Error('UPLOAD.EE diproses melalui uploader resmi di panel.'));
+  if(provider==='uploader')return Promise.reject(new Error('UPLOADER diproses lewat form di panel.'));
   if(provider==='uguu'){
     return new Promise((resolve,reject)=>{
       const xhr=new XMLHttpRequest(), form=new FormData();
@@ -486,7 +489,7 @@ function uploadFile(file,provider,onProgress){
 const GAGAL = { enhance: 'GAGAL MEMPERJELAS', kompres: 'GAGAL KOMPRES', dimensi: 'GAGAL UBAH DIMENSI', upload: 'GAGAL UPLOAD' };
 
 $('vProcessBtn').addEventListener('click', async () => {
-  if (state.tab==='upload' && state.provider==='uploadee') { updateVideoProviderView(); return; }
+  if (state.tab==='upload' && state.provider==='uploader') { updateVideoProviderView(); return; }
   if (!state.file || state.busy) return;
   const tab = state.tab;
   state.busy = true;

@@ -656,12 +656,12 @@ $('dNewBtn').addEventListener('click',()=>{
 
 /* ═══════════════════════════════════════════════
    TAB 4 — UPLOAD KE LINK
-   Upload foto ke Gobox / Uguu / Upload.ee
+   Upload foto ke Gobox / Uguu / Uploader
    ═══════════════════════════════════════════════ */
 
 const UPLOAD_ENDPOINT  = '/api/upload';
 const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;   // batas jalur Gobox via HidzImage
-const UPLOAD_LABELS    = { gobox:'GOBOX', uguu:'UGUU', uploadee:'UPLOAD.EE' };
+const UPLOAD_LABELS    = { gobox:'GOBOX', uguu:'UGUU', uploader:'UPLOADER' };
 
 let uFile=null, uProvider='gobox', uResultLink=null;
 
@@ -691,14 +691,14 @@ function uLoad(file){
 }
 
 function uUpdateProviderView(){
-  const external=$('uUploadEeWrap');
+  const external=$('uUploaderWrap');
   const button=$('uProcessBtn');
   if(!external||!button) return;
-  const isExternal=uProvider==='uploadee';
+  const isExternal=uProvider==='uploader';
   external.classList.toggle('hidden', !isExternal);
   button.classList.toggle('hidden', isExternal);
   if(isExternal){
-    $('uProgSub').textContent='gunakan uploader resmi Upload.ee di panel ini';
+    $('uProgSub').textContent='gunakan form UPLOADER di panel ini';
     external.scrollIntoView({behavior:'smooth', block:'center'});
   }
 }
@@ -794,7 +794,7 @@ async function uUploadFile(file, provider, onProgress){
 
 /* Process — upload */
 $('uProcessBtn').addEventListener('click', async()=>{
-  if (uProvider === 'uploadee') {
+  if (uProvider === 'uploader') {
     uUpdateProviderView();
     return;
   }
