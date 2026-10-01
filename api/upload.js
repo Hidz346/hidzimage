@@ -17,7 +17,7 @@
 const API_BASE = (process.env.UPLOAD_API_BASE || 'https://api-hidz.html-5.me/docs/api/uploader').replace(/\/+$/, '');
 
 const PROVIDERS = {
-  gobox:   { url: `${API_BASE}/gobox.php`,  media: 'image', field: 'file', kind: 'generic-json' },
+  gobox:   { url: `${API_BASE}/gobox.php`,  media: 'both', field: 'file', kind: 'generic-json' },
   uguu:    { url: 'https://uguu.se/upload',                           media: 'both',  field: 'files[]', kind: 'uguu' },
 };
 
@@ -159,7 +159,7 @@ module.exports = async function handler(req, res) {
       res,
       400,
       providerName === 'gobox'
-        ? 'GOBOX hanya tersedia untuk upload foto.'
+        ? 'GOBOX gagal menerima file ini dari server upload.'
         : 'Layanan ini tidak mendukung tipe file tersebut.'
     );
   }
