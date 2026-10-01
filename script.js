@@ -703,6 +703,19 @@ function uUpdateProviderView(){
   }
 }
 
+/* Skala form UPLOADER mengikuti lebar panel (lebar render diatur di CSS: --ue-w) */
+function fitUploaderFrame(){
+  const vp=document.querySelector('.ue-viewport');
+  if(!vp||!vp.clientWidth) return;
+  const baseW=parseFloat(getComputedStyle(vp).getPropertyValue('--ue-w'))||340;
+  vp.style.setProperty('--ue-scale', Math.min(1, vp.clientWidth/baseW).toFixed(4));
+}
+(function(){
+  const vp=document.querySelector('.ue-viewport');
+  if(vp&&'ResizeObserver' in window) new ResizeObserver(fitUploaderFrame).observe(vp);
+  window.addEventListener('resize', fitUploaderFrame);
+})();
+
 /* Pilih layanan upload */
 const uProviderBtns=document.querySelectorAll('#uProviderGroup .prov-opt');
 uProviderBtns.forEach(b=>b.addEventListener('click',()=>{

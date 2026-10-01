@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
   <title>HidzImage — HD Enhancer</title>
   <link rel="icon" href="https://www.gobox.my.id/file/IcHjU.png"/>
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style.css?v=20261001-1600"/>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 </head>
 <body>
@@ -392,8 +392,13 @@
             </button>
           </div>
           <div class="external-uploader hidden" id="uUploaderWrap">
-            <div class="external-uploader-title">UPLOADER — FORM UPLOAD RESMI</div>
-            <iframe src="https://www.upload.ee/?page=uploadsimple&amp;lng=eng" title="Form upload UPLOADER" loading="lazy"></iframe>
+            <div class="external-uploader-title">UPLOADER — FILES &amp; IMAGES</div>
+            <div class="ue-viewport">
+              <div class="ue-stage">
+                <iframe class="ue-frame" src="https://www.upload.ee/?page=uploadsimple&amp;lng=eng" title="Form upload UPLOADER" loading="lazy"></iframe>
+                <span class="ue-mask" aria-hidden="true"></span>
+              </div>
+            </div>
           </div>
           <div class="process-wrap">
             <button class="btn btn-pink btn-block" id="uProcessBtn">☁ UPLOAD SEKARANG</button>
@@ -456,6 +461,6 @@
   b.addEventListener('click',function(){a(!document.body.classList.contains('dark'));});
 })();
 </script>
-<script src="script.js?v=20261001-1530"></script>
+<script src="script.js?v=20261001-1600"></script>
 </body>
 </html>
