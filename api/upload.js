@@ -1,15 +1,28 @@
 'use strict';
 
-/*
- * HidzImage — upload proxy.
- * The browser sends the binary to this same-origin endpoint; the endpoint
- * forwards it to Uguu using the documented multipart field: files[].
+/**
+ * HidzImage upload proxy
  *
- * The old Gobox / Upload.ee provider keys are accepted as aliases so older
- * clients do not break, but the active backend is Uguu.
+ * PHOTO:
+ *   gobox -> existing Hidz uploader endpoint (photo-only)
+ *   uguu  -> Uguu
+ *
+ * VIDEO:
+ *   uguu  -> Uguu
+ *   catbox -> Catbox direct file upload
+ *
+ * The browser still talks to /api/upload so provider-specific
+ * API formats and CORS never leak into the UI.
  */
 
-const UPSTREAM_URL = 'https://uguu.se/upload';
+const API_BASE = (process.env.UPLOAD_API_BASE || 'https://api-hidz.html-5.me/docs/api/uploader').replace(/\/+$/, '');
+
+const PROVIDERS = {
+  gobox:   { url: `${API_BASE}/gobox.php`,  media: 'image', field: 'file', kind: 'generic-json' },
+  uguu:    { url: 'https://uguu.se/upload',                           media: 'both',  field: 'files[]', kind: 'uguu' },
+  catbox:  { url: 'https://catbox.moe/user/api.php',                  media: 'video', field: 'fileToUpload', kind: 'catbox' },
+};
+
 const MAX_BYTES = 4 * 1024 * 1024;
 const TIMEOUT_MS = 30000;
 
@@ -42,9 +55,12 @@ async function readBody(req) {
 
 function findLink(node, depth = 0) {
   if (isUrl(node)) return node.trim();
-  if (!node || typeof node !== 'object' || depth > 5) return null;
+  if (!node || typeof node !== 'object' || depth > 6) return null;
 
-  for (const key of ['url', 'Url', 'link', 'Link', 'Result_url', 'result_url', 'downloadUrl']) {
+  for (const key of [
+    'url', 'Url', 'link', 'Link', 'Result_url', 'result_url',
+    'downloadUrl', 'download_url', 'fileUrl', 'file_url'
+  ]) {
     if (isUrl(node[key])) return node[key].trim();
   }
 
@@ -57,7 +73,7 @@ function findLink(node, depth = 0) {
 }
 
 function findError(node, depth = 0) {
-  if (!node || typeof node !== 'object' || depth > 4) return null;
+  if (!node || typeof node !== 'object' || depth > 5) return null;
 
   for (const key of ['error', 'Error', 'message', 'Message', 'description']) {
     const value = node[key];
@@ -74,15 +90,59 @@ function findError(node, depth = 0) {
   return null;
 }
 
+function parseJson(text) {
+  try { return JSON.parse(text); }
+  catch (_) { return null; }
+}
+
+function buildForm(provider, buffer, type, fileName) {
+  const form = new FormData();
+
+  if (provider.kind === 'uguu') {
+    form.append('files[]', new Blob([buffer], { type }), fileName);
+  } else if (provider.kind === 'catbox') {
+    form.append('reqtype', 'fileupload');
+    form.append('fileToUpload', new Blob([buffer], { type }), fileName);
+  } else {
+    form.append('file', new Blob([buffer], { type }), fileName);
+  }
+
+  return form;
+}
+
+function mediaAllowed(provider, type) {
+  if (provider.media === 'both') return true;
+  return provider.media === 'image'
+    ? type.startsWith('image/')
+    : type.startsWith('video/');
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return fail(res, 405, 'Metode tidak diizinkan.');
   }
 
-  const type = String(req.headers['x-file-type'] || '');
+  const providerName = String(req.headers['x-provider'] || '').toLowerCase();
+  const provider = PROVIDERS[providerName];
+
+  if (!provider) {
+    return fail(res, 400, 'Layanan upload tidak dikenal.');
+  }
+
+  const type = String(req.headers['x-file-type'] || '').toLowerCase();
   if (!/^(image|video)\/[a-z0-9.+-]+$/i.test(type)) {
     return fail(res, 400, 'Hanya file foto atau video yang bisa diupload.');
+  }
+
+  if (!mediaAllowed(provider, type)) {
+    return fail(
+      res,
+      400,
+      providerName === 'gobox'
+        ? 'GOBOX hanya tersedia untuk upload foto.'
+        : 'Layanan ini tidak mendukung tipe file tersebut.'
+    );
   }
 
   const buffer = await readBody(req);
@@ -95,10 +155,10 @@ module.exports = async function handler(req, res) {
     return fail(res, 413, 'Ukuran file terlalu besar. Maksimal 4 MB per upload.');
   }
 
-  const form = new FormData();
-  form.append(
-    'files[]',
-    new Blob([buffer], { type }),
+  const form = buildForm(
+    provider,
+    buffer,
+    type,
     safeName(req.headers['x-file-name'])
   );
 
@@ -109,13 +169,11 @@ module.exports = async function handler(req, res) {
   let responseText = '';
 
   try {
-    upstream = await fetch(UPSTREAM_URL, {
+    upstream = await fetch(provider.url, {
       method: 'POST',
       body: form,
       signal: ctrl.signal,
-      headers: {
-        Accept: 'application/json',
-      },
+      headers: provider.kind === 'catbox' ? { Accept: 'text/plain' } : { Accept: 'application/json' },
     });
 
     responseText = await upstream.text();
@@ -126,38 +184,39 @@ module.exports = async function handler(req, res) {
       502,
       timedOut
         ? 'Server upload terlalu lama merespons.'
-        : 'Server upload Uguu tidak dapat dihubungi.',
+        : `Server ${providerName.toUpperCase()} tidak dapat dihubungi.`,
     );
   } finally {
     clearTimeout(timer);
   }
 
-  let data = null;
-  try {
-    data = JSON.parse(responseText);
-  } catch (_) {}
+  const data = parseJson(responseText);
 
   if (!upstream.ok) {
     return fail(
       res,
       502,
-      findError(data) || `Server upload mengembalikan HTTP ${upstream.status}.`,
-      { upstreamStatus: upstream.status }
+      findError(data) || responseText.trim().slice(0, 240) ||
+        `Server upload mengembalikan HTTP ${upstream.status}.`,
+      { provider: providerName, upstreamStatus: upstream.status }
     );
   }
 
-  const link = findLink(data) || (isUrl(responseText) ? responseText.trim() : null);
+  const link =
+    findLink(data) ||
+    (isUrl(responseText) ? responseText.trim() : null);
 
   if (!link) {
     return fail(
       res,
       502,
       findError(data) || 'Upload selesai tetapi URL hasil tidak ditemukan.',
+      { provider: providerName }
     );
   }
 
   return res.status(200).json({
     url: link,
-    provider: 'uguu',
+    provider: providerName,
   });
 };
