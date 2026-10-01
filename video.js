@@ -56,17 +56,21 @@ const TABS = {
   enhance: { panel: 'pEnhance', label: '✦ PROSES VIDEO SEKARANG', note: 'semua berjalan di browser — privasi terjaga' },
   kompres: { panel: 'pKompres', label: '⚡ KOMPRES SEKARANG',     note: 'output sesuai dukungan browser · hasil mendekati target' },
   dimensi: { panel: 'pDimensi', label: '↔ UBAH DIMENSI SEKARANG', note: 'output sesuai dukungan browser · proses di browser' },
-  upload:  { panel: 'pUpload',  label: '☁ UPLOAD SEKARANG',       note: 'video dikirim ke Uguu · di atas 4 MB dikecilkan otomatis' },
+  upload:  { panel: 'pUpload',  label: '☁ UPLOAD SEKARANG',       note: 'video diupload langsung ke AnonMP4/UGUU · tanpa batas 4 MB dari Vercel' },
 };
 const STAGES = ['vUpload', 'vSettings', 'vProgress', 'vResult'];
-const UPLOAD_LABELS = { uguu: 'UGUU', catbox: 'CATBOX' };
+const UPLOAD_LABELS = { anonmp4: 'ANONMP4', uguu: 'UGUU' };
+const VIDEO_UPLOAD_APIS = {
+  anonmp4: 'https://anonmp4api.xyz/upload',
+  uguu: 'https://uguu.se/upload',
+};
 const UPLOAD_ENDPOINT = '/api/upload';
-const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;   // batas body request fungsi serverless
+const UPLOAD_MAX_BYTES = 20 * 1024 * 1024 * 1024; // batas yang dijelaskan API AnonMP4; browser/perangkat tetap menjadi batas praktis
 const MAX_SIDE = 2560;                      // sisi terpanjang hasil enhance
 
 const state = {
   tab: 'enhance', file: null, url: null, outUrl: null,
-  vw: 0, vh: 0, dur: 0, scale: 2, unit: 'MB', locked: true, provider: 'catbox',
+  vw: 0, vh: 0, dur: 0, scale: 2, unit: 'MB', locked: true, provider: 'anonmp4',
   busy: false, ext: 'webm', link: null,
 };
 
@@ -389,52 +393,73 @@ const runners = {
   },
 
   async upload() {
-    let payload = state.file, shrunk = false;
-    if (payload.size > UPLOAD_MAX_BYTES) {
-      const plan = planCompress(UPLOAD_MAX_BYTES * 0.85);
-      if (!plan) throw new Error('Video terlalu panjang untuk diupload lewat layanan ini.');
-      setProgress(0, 'MENYIAPKAN VIDEO', 'mengecilkan ukuran agar muat diupload', '📦');
-      const { blob } = await renderVideo({ ...plan }, f =>
-        setProgress(f * 0.6, null, `mengecilkan ${fmtTime(f * state.dur)} / ${fmtTime(state.dur)}`));
-      if (blob.size > UPLOAD_MAX_BYTES) throw new Error('Video masih terlalu besar setelah dikecilkan. Pangkas durasinya dulu.');
-      payload = new File([blob], state.file.name.replace(/\.[^.]+$/, '') + '.' + state.ext, { type: blob.type });
-      shrunk = true;
-    }
-    setProgress(shrunk ? 0.65 : 0.05, 'MENGUPLOAD', 'mengirim ke ' + UPLOAD_LABELS[state.provider] + '...', '☁️');
-    const link = await uploadFile(payload, state.provider, frac =>
-      setProgress((shrunk ? 0.65 : 0.05) + frac * (shrunk ? 0.33 : 0.9)));
+    setProgress(0.04, 'MENGUPLOAD', 'mengirim video ke ' + UPLOAD_LABELS[state.provider] + '...', '☁️');
+
+    const link = await uploadFile(state.file, state.provider, frac =>
+      setProgress(0.05 + frac * 0.92, null, 'mengirim video...'));
+
     state.link = link;
     return {
       link, title: 'VIDEO BERHASIL DIUPLOAD',
-      chips: [`<span class="chip chip-pink">${UPLOAD_LABELS[state.provider]}</span>`,
-              `<span class="chip chip-plain">${fmtSize(payload.size)}</span>`,
-              shrunk ? '<span class="chip chip-plain">DIKECILKAN</span>' : '',
-              '<span class="chip chip-green">LINK SIAP ✓</span>'],
+      chips: [
+        `<span class="chip chip-pink">${UPLOAD_LABELS[state.provider]}</span>`,
+        `<span class="chip chip-plain">${fmtSize(state.file.size)}</span>`,
+        '<span class="chip chip-green">LINK SIAP ✓</span>',
+      ],
     };
-  },
+  }
 };
 
 /** Kirim file ke /api/upload, kembalikan URL hasil. onProgress menerima 0..1. */
 function uploadFile(file, provider, onProgress) {
+  const endpoint = VIDEO_UPLOAD_APIS[provider];
+  if (!endpoint) return Promise.reject(new Error('Layanan video tidak dikenal.'));
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', UPLOAD_ENDPOINT);
-    xhr.timeout = 90000;
-    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-    xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
-    xhr.setRequestHeader('X-File-Type', file.type);
-    xhr.setRequestHeader('X-Provider', provider);
-    xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
-    xhr.onerror   = () => reject(new Error('Tidak bisa terhubung ke server. Cek koneksi internet.'));
+    const form = new FormData();
+
+    if (provider === 'anonmp4') {
+      if (!file.type.startsWith('video/')) {
+        reject(new Error('AnonMP4 hanya menerima file video.'));
+        return;
+      }
+      form.append('file', file, file.name);
+    } else {
+      form.append('files[]', file, file.name);
+    }
+
+    xhr.open('POST', endpoint, true);
+    xhr.timeout = 0;
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onerror = () => reject(new Error('Tidak bisa terhubung ke layanan video. Coba lagi.'));
     xhr.ontimeout = () => reject(new Error('Upload terlalu lama. Coba lagi.'));
+
     xhr.onload = () => {
       let data = null;
-      try { data = JSON.parse(xhr.responseText); } catch (e) { /* respons bukan JSON */ }
-      if (xhr.status === 413) return reject(new Error('Ukuran video terlalu besar.'));
-      if (xhr.status >= 200 && xhr.status < 300 && data && data.url) return resolve(data.url);
-      reject(new Error((data && data.error) || 'Upload gagal (kode ' + xhr.status + '). Coba lagi.'));
+      try { data = JSON.parse(xhr.responseText); } catch (_) {}
+
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const msg = data?.error?.message || data?.message || data?.error || xhr.responseText;
+        reject(new Error(String(msg || 'Upload gagal.').slice(0, 300)));
+        return;
+      }
+
+      const link = provider === 'anonmp4'
+        ? data?.watch_url
+        : data?.files?.[0]?.url;
+
+      if (link && /^https?:\/\//i.test(link)) {
+        resolve(link);
+        return;
+      }
+
+      reject(new Error('Upload selesai tetapi link video tidak ditemukan.'));
     };
-    xhr.send(file);
+
+    xhr.send(form);
   });
 }
 
