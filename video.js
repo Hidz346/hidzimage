@@ -59,14 +59,14 @@ const TABS = {
   upload:  { panel: 'pUpload',  label: '☁ UPLOAD SEKARANG',       note: 'video dikirim ke Uguu · di atas 4 MB dikecilkan otomatis' },
 };
 const STAGES = ['vUpload', 'vSettings', 'vProgress', 'vResult'];
-const UPLOAD_LABELS = { uguu: 'UGUU' };
+const UPLOAD_LABELS = { uguu: 'UGUU', catbox: 'CATBOX' };
 const UPLOAD_ENDPOINT = '/api/upload';
 const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;   // batas body request fungsi serverless
 const MAX_SIDE = 2560;                      // sisi terpanjang hasil enhance
 
 const state = {
   tab: 'enhance', file: null, url: null, outUrl: null,
-  vw: 0, vh: 0, dur: 0, scale: 2, unit: 'MB', locked: true, provider: 'uguu',
+  vw: 0, vh: 0, dur: 0, scale: 2, unit: 'MB', locked: true, provider: 'catbox',
   busy: false, ext: 'webm', link: null,
 };
 
