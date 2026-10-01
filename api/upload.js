@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 /**
  * HidzImage upload proxy
  *
@@ -22,7 +24,8 @@ const PROVIDERS = {
 };
 
 const MAX_BYTES = 4 * 1024 * 1024;
-const TIMEOUT_MS = 30000;
+const TIMEOUT_MS = 25000;   // di bawah maxDuration di vercel.json
+const MAX_HOPS = 3;
 
 const isUrl = value =>
   typeof value === 'string' && /^https?:\/\/\S+$/i.test(value.trim());
@@ -89,7 +92,7 @@ function findTextLink(text) {
   if (!text || typeof text !== 'string') return null;
   const absolute = text.match(/https?:\/\/[^\s"'<>]+/i);
   if (absolute && isUrl(absolute[0])) return absolute[0].replace(/[),.;]+$/, '');
-  const relative = text.match(/(?:^|["'\\s])(\/file\/[A-Za-z0-9._-]+)(?:["'\\s]|$)/i);
+  const relative = text.match(/(?:^|["'\s])(\/file\/[A-Za-z0-9._-]+)(?:["'\s]|$)/i);
   if (relative) return 'https://www.gobox.my.id' + relative[1];
   return null;
 }
@@ -97,7 +100,7 @@ function findTextLink(text) {
 function findError(node, depth = 0) {
   if (!node || typeof node !== 'object' || depth > 5) return null;
 
-  for (const key of ['error', 'Error', 'message', 'Message', 'description']) {
+  for (const key of ['error', 'Error', 'message', 'Message', 'description', 'Result_url', 'result_url']) {
     const value = node[key];
     if (typeof value === 'string' && value.trim() && !isUrl(value)) {
       return value.trim().slice(0, 240);
@@ -127,6 +130,78 @@ function buildForm(provider, buffer, type, fileName) {
   }
 
   return form;
+}
+
+const isHtml = text => /^\s*<(?:!doctype|html|head|body|script)/i.test(text || '');
+
+/** API kadang membalas HTTP 200 padahal isinya gagal (Status:false / Code:400). */
+function reportedFailure(data) {
+  if (!data || typeof data !== 'object') return false;
+  const flag = data.Status ?? data.status ?? data.success;
+  const code = Number(data.Code ?? data.code);
+  return flag === false || code >= 400;
+}
+
+/**
+ * Hosting gratis tertentu menjawab request tanpa cookie dengan halaman JS
+ * (AES, cookie __test). Browser menjawabnya otomatis, server tidak, jadi
+ * dijawab di sini lalu request diulang.
+ */
+function solveChallenge(html) {
+  if (!/slowAES|aes\.js/i.test(html)) return null;
+  const parts = [...html.matchAll(/toNumbers\("([0-9a-f]{32})"\)/gi)].map(m => Buffer.from(m[1], 'hex'));
+  if (parts.length < 3) return null;
+
+  try {
+    const [key, iv, data] = parts;
+    const decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
+    decipher.setAutoPadding(false);
+    return '__test=' + Buffer.concat([decipher.update(data), decipher.final()]).toString('hex');
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * POST ke server upload. Redirect diikuti manual supaya tetap POST
+ * (fetch biasa mengubahnya jadi GET dan file hilang -> NO_FILE).
+ */
+async function postUpstream(provider, buffer, type, fileName, signal) {
+  let url = provider.url;
+  let cookie = '';
+
+  for (let hop = 0; hop <= MAX_HOPS; hop++) {
+    const headers = { Accept: 'application/json' };
+    if (cookie) headers.Cookie = cookie;
+
+    const reply = await fetch(url, {
+      method: 'POST',
+      body: buildForm(provider, buffer, type, fileName),
+      headers,
+      redirect: 'manual',
+      signal,
+    });
+    const text = await reply.text();
+
+    const location = reply.headers.get('location');
+    if (reply.status >= 300 && reply.status < 400 && location) {
+      url = new URL(location, url).toString();
+      continue;
+    }
+
+    const challenge = cookie ? null : solveChallenge(text);
+    if (challenge) {
+      cookie = challenge;
+      const retry = new URL(provider.url);
+      retry.searchParams.set('i', '1');
+      url = retry.toString();
+      continue;
+    }
+
+    return { ok: reply.ok, status: reply.status, text };
+  }
+
+  throw new Error('Terlalu banyak redirect.');
 }
 
 function mediaAllowed(provider, type) {
@@ -174,28 +249,19 @@ module.exports = async function handler(req, res) {
     return fail(res, 413, 'Ukuran file terlalu besar. Maksimal 4 MB per upload.');
   }
 
-  const form = buildForm(
-    provider,
-    buffer,
-    type,
-    safeName(req.headers['x-file-name'])
-  );
-
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
 
   let upstream;
-  let responseText = '';
 
   try {
-    upstream = await fetch(provider.url, {
-      method: 'POST',
-      body: form,
-      signal: ctrl.signal,
-      headers: { Accept: 'application/json' },
-    });
-
-    responseText = await upstream.text();
+    upstream = await postUpstream(
+      provider,
+      buffer,
+      type,
+      safeName(req.headers['x-file-name']),
+      ctrl.signal
+    );
   } catch (err) {
     const timedOut = err && err.name === 'AbortError';
     return fail(
@@ -209,24 +275,26 @@ module.exports = async function handler(req, res) {
     clearTimeout(timer);
   }
 
+  const responseText = upstream.text;
   const data = parseJson(responseText);
 
-  if (!upstream.ok) {
+  if (!upstream.ok || reportedFailure(data)) {
+    console.error(`[upload] ${providerName} gagal (HTTP ${upstream.status}):`, responseText.slice(0, 300));
     return fail(
       res,
       502,
-      findError(data) || responseText.trim().slice(0, 240) ||
+      findError(data) ||
+        (isHtml(responseText) ? '' : responseText.trim().slice(0, 240)) ||
         `Server upload mengembalikan HTTP ${upstream.status}.`,
       { provider: providerName, upstreamStatus: upstream.status }
     );
   }
 
-  const link =
-    findLink(data) ||
-    findTextLink(responseText) ||
-    (isUrl(responseText) ? responseText.trim() : null);
+  const plain = isHtml(responseText) ? '' : responseText;
+  const link = findLink(data) || findTextLink(plain);
 
   if (!link) {
+    console.error(`[upload] ${providerName}: link tidak ditemukan:`, responseText.slice(0, 300));
     return fail(
       res,
       502,
