@@ -56,21 +56,21 @@ const TABS = {
   enhance: { panel: 'pEnhance', label: '✦ PROSES VIDEO SEKARANG', note: 'semua berjalan di browser — privasi terjaga' },
   kompres: { panel: 'pKompres', label: '⚡ KOMPRES SEKARANG',     note: 'output sesuai dukungan browser · hasil mendekati target' },
   dimensi: { panel: 'pDimensi', label: '↔ UBAH DIMENSI SEKARANG', note: 'output sesuai dukungan browser · proses di browser' },
-  upload:  { panel: 'pUpload',  label: '☁ UPLOAD SEKARANG',       note: 'video diupload langsung ke AnonMP4/UGUU · tanpa batas 4 MB dari Vercel' },
+  upload:  { panel: 'pUpload',  label: '☁ UPLOAD SEKARANG',       note: 'video diupload langsung ke File.io/UGUU · tidak melewati /api/upload' },
 };
 const STAGES = ['vUpload', 'vSettings', 'vProgress', 'vResult'];
-const UPLOAD_LABELS = { anonmp4: 'ANONMP4', uguu: 'UGUU' };
+const UPLOAD_LABELS = { fileio: 'FILE.IO', uguu: 'UGUU' };
 const VIDEO_UPLOAD_APIS = {
-  anonmp4: 'https://anonmp4api.xyz/upload',
+  fileio: 'https://file.io',
   uguu: 'https://uguu.se/upload',
 };
 const UPLOAD_ENDPOINT = '/api/upload';
-const UPLOAD_MAX_BYTES = 20 * 1024 * 1024 * 1024; // batas yang dijelaskan API AnonMP4; browser/perangkat tetap menjadi batas praktis
+const UPLOAD_MAX_BYTES = 2 * 1024 * 1024 * 1024; // batas praktis free File.io; provider dapat menerapkan limit/rate-limit berbeda
 const MAX_SIDE = 2560;                      // sisi terpanjang hasil enhance
 
 const state = {
   tab: 'enhance', file: null, url: null, outUrl: null,
-  vw: 0, vh: 0, dur: 0, scale: 2, unit: 'MB', locked: true, provider: 'anonmp4',
+  vw: 0, vh: 0, dur: 0, scale: 2, unit: 'MB', locked: true, provider: 'fileio',
   busy: false, ext: 'webm', link: null,
 };
 
@@ -419,11 +419,7 @@ function uploadFile(file, provider, onProgress) {
     const xhr = new XMLHttpRequest();
     const form = new FormData();
 
-    if (provider === 'anonmp4') {
-      if (!file.type.startsWith('video/')) {
-        reject(new Error('AnonMP4 hanya menerima file video.'));
-        return;
-      }
+    if (provider === 'fileio') {
       form.append('file', file, file.name);
     } else {
       form.append('files[]', file, file.name);
@@ -447,8 +443,8 @@ function uploadFile(file, provider, onProgress) {
         return;
       }
 
-      const link = provider === 'anonmp4'
-        ? data?.watch_url
+      const link = provider === 'fileio'
+        ? data?.link
         : data?.files?.[0]?.url;
 
       if (link && /^https?:\/\//i.test(link)) {
