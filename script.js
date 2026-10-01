@@ -656,7 +656,7 @@ $('dNewBtn').addEventListener('click',()=>{
 
 /* ═══════════════════════════════════════════════
    TAB 4 — UPLOAD KE LINK
-   Upload foto ke Gobox / Uguu / Upload.ee lewat proxy /api/upload
+   Upload foto ke Uguu lewat proxy /api/upload
    ═══════════════════════════════════════════════ */
 
 const UPLOAD_ENDPOINT  = '/api/upload';
