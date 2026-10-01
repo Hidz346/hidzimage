@@ -410,7 +410,7 @@ const runners = {
   }
 };
 
-/** Kirim file ke /api/upload, kembalikan URL hasil. onProgress menerima 0..1. */
+/** Upload langsung ke provider video; progress menerima nilai 0..1. */
 function uploadFile(file, provider, onProgress) {
   const endpoint = VIDEO_UPLOAD_APIS[provider];
   if (!endpoint) return Promise.reject(new Error('Layanan video tidak dikenal.'));
