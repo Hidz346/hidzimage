@@ -8,10 +8,9 @@
  *   uguu  -> Uguu
  *
  * VIDEO:
- *   uguu  -> Uguu
- *   catbox -> Catbox direct file upload
+ *   handled directly by the browser (File.io / Uguu)
  *
- * The browser still talks to /api/upload so provider-specific
+ * The browser still talks to /api/upload for photo providers so provider-specific
  * API formats and CORS never leak into the UI.
  */
 
@@ -20,7 +19,6 @@ const API_BASE = (process.env.UPLOAD_API_BASE || 'https://api-hidz.html-5.me/doc
 const PROVIDERS = {
   gobox:   { url: `${API_BASE}/gobox.php`,  media: 'image', field: 'file', kind: 'generic-json' },
   uguu:    { url: 'https://uguu.se/upload',                           media: 'both',  field: 'files[]', kind: 'uguu' },
-  catbox:  { url: 'https://catbox.moe/user/api.php',                  media: 'video', field: 'fileToUpload', kind: 'catbox' },
 };
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -124,9 +122,6 @@ function buildForm(provider, buffer, type, fileName) {
 
   if (provider.kind === 'uguu') {
     form.append('files[]', new Blob([buffer], { type }), fileName);
-  } else if (provider.kind === 'catbox') {
-    form.append('reqtype', 'fileupload');
-    form.append('fileToUpload', new Blob([buffer], { type }), fileName);
   } else {
     form.append('file', new Blob([buffer], { type }), fileName);
   }
@@ -197,7 +192,7 @@ module.exports = async function handler(req, res) {
       method: 'POST',
       body: form,
       signal: ctrl.signal,
-      headers: provider.kind === 'catbox' ? { Accept: 'text/plain' } : { Accept: 'application/json' },
+      headers: { Accept: 'application/json' },
     });
 
     responseText = await upstream.text();
