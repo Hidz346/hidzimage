@@ -59,18 +59,18 @@ const TABS = {
   upload:  { panel: 'pUpload',  label: '☁ UPLOAD SEKARANG',       note: 'video diupload langsung ke File.io/UGUU · tidak melewati /api/upload' },
 };
 const STAGES = ['vUpload', 'vSettings', 'vProgress', 'vResult'];
-const UPLOAD_LABELS = { fileio: 'FILE.IO', uguu: 'UGUU' };
+const UPLOAD_LABELS = { gobox: 'GOBOX', uguu: 'UGUU', uploadee: 'UPLOAD.EE' };
 const VIDEO_UPLOAD_APIS = {
-  fileio: 'https://file.io',
+  gobox: '/api/upload',
   uguu: 'https://uguu.se/upload',
 };
 const UPLOAD_ENDPOINT = '/api/upload';
-const UPLOAD_MAX_BYTES = 2 * 1024 * 1024 * 1024; // batas praktis free File.io; provider dapat menerapkan limit/rate-limit berbeda
+const UPLOAD_MAX_BYTES = 4 * 1024 * 1024; // batas jalur Gobox via HidzImage
 const MAX_SIDE = 2560;                      // sisi terpanjang hasil enhance
 
 const state = {
   tab: 'enhance', file: null, url: null, outUrl: null,
-  vw: 0, vh: 0, dur: 0, scale: 2, unit: 'MB', locked: true, provider: 'fileio',
+  vw: 0, vh: 0, dur: 0, scale: 2, unit: 'MB', locked: true, provider: 'gobox',
   busy: false, ext: 'webm', link: null,
 };
 
@@ -203,12 +203,28 @@ $('vLockBtn').addEventListener('click', () => {
 
 /* Upload */
 const providerBtns = document.querySelectorAll('#vProviderGroup .prov-opt');
+function updateVideoProviderView(){
+  const external=$('vUploadEeWrap');
+  const button=$('vProcessBtn');
+  const note=$('vProcessNote');
+  if(!external||!button||!note)return;
+  const externalMode=state.provider==='uploadee';
+  external.classList.toggle('hidden',!externalMode);
+  button.classList.toggle('hidden',externalMode);
+  note.textContent=externalMode
+    ? 'UPLOAD.EE langsung di panel · maksimal 100 MB anonim'
+    : state.provider==='uguu'
+      ? 'UGUU langsung · maksimal 128 MiB per file · sekitar 3 jam'
+      : 'GOBOX melalui HidzImage · maksimal 4 MB per file';
+  if(externalMode)external.scrollIntoView({behavior:'smooth',block:'center'});
+}
 providerBtns.forEach(b => b.addEventListener('click', () => {
   providerBtns.forEach(x => {
     x.classList.toggle('active', x === b);
     x.setAttribute('aria-checked', x === b);
   });
   state.provider = b.dataset.provider;
+  updateVideoProviderView();
 }));
 
 /* ═══════════════════════════════════════════════
@@ -393,69 +409,73 @@ const runners = {
   },
 
   async upload() {
-    setProgress(0.04, 'MENGUPLOAD', 'mengirim video ke ' + UPLOAD_LABELS[state.provider] + '...', '☁️');
-
-    const link = await uploadFile(state.file, state.provider, frac =>
-      setProgress(0.05 + frac * 0.92, null, 'mengirim video...'));
-
-    state.link = link;
+    if(state.provider==='uploadee'){
+      updateVideoProviderView();
+      throw new Error('UPLOAD.EE diproses langsung melalui uploader resmi di panel.');
+    }
+    let payload=state.file, shrunk=false;
+    if(state.provider==='gobox' && payload.size>UPLOAD_MAX_BYTES){
+      const plan=planCompress(UPLOAD_MAX_BYTES*0.85);
+      if(!plan)throw new Error('Video terlalu panjang untuk dikompres ke batas 4 MB GOBOX.');
+      setProgress(0.02,'MENYIAPKAN VIDEO','mengecilkan video agar muat di GOBOX','📦');
+      const {blob}=await renderVideo({...plan},f=>setProgress(f*0.55,null,`mengecilkan ${fmtTime(f*state.dur)} / ${fmtTime(state.dur)}`));
+      if(blob.size>UPLOAD_MAX_BYTES)throw new Error('Video masih lebih dari 4 MB setelah dikompres.');
+      payload=new File([blob],state.file.name.replace(/\.[^.]+$/,'')+'.'+state.ext,{type:blob.type});
+      shrunk=true;
+    }
+    setProgress(shrunk?0.58:0.04,'MENGUPLOAD','mengirim video ke '+UPLOAD_LABELS[state.provider]+'...','☁️');
+    const link=await uploadFile(payload,state.provider,frac=>setProgress((shrunk?0.58:0.04)+frac*(shrunk?0.37:0.92),null,'mengirim video...'));
+    state.link=link;
     return {
-      link, title: 'VIDEO BERHASIL DIUPLOAD',
-      chips: [
+      link,title:'VIDEO BERHASIL DIUPLOAD',
+      chips:[
         `<span class="chip chip-pink">${UPLOAD_LABELS[state.provider]}</span>`,
-        `<span class="chip chip-plain">${fmtSize(state.file.size)}</span>`,
+        `<span class="chip chip-plain">${fmtSize(payload.size)}</span>`,
+        shrunk?'<span class="chip chip-plain">DIKECILKAN</span>':'',
         '<span class="chip chip-green">LINK SIAP ✓</span>',
       ],
     };
   }
 };
 
-/** Upload langsung ke provider video; progress menerima nilai 0..1. */
-function uploadFile(file, provider, onProgress) {
-  const endpoint = VIDEO_UPLOAD_APIS[provider];
-  if (!endpoint) return Promise.reject(new Error('Layanan video tidak dikenal.'));
-
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    const form = new FormData();
-
-    if (provider === 'fileio') {
-      form.append('file', file, file.name);
-    } else {
-      form.append('files[]', file, file.name);
-    }
-
-    xhr.open('POST', endpoint, true);
-    xhr.timeout = 0;
-    xhr.upload.onprogress = e => {
-      if (e.lengthComputable) onProgress(e.loaded / e.total);
+/** Upload video ke Gobox atau Uguu; Upload.ee memakai iframe resmi. */
+function uploadFile(file,provider,onProgress){
+  if(provider==='uploadee')return Promise.reject(new Error('UPLOAD.EE diproses melalui uploader resmi di panel.'));
+  if(provider==='uguu'){
+    return new Promise((resolve,reject)=>{
+      const xhr=new XMLHttpRequest(), form=new FormData();
+      form.append('files[]',file,file.name);
+      xhr.open('POST',VIDEO_UPLOAD_APIS.uguu,true);
+      xhr.timeout=0;
+      xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(e.loaded/e.total);};
+      xhr.onerror=()=>reject(new Error('UGUU tidak dapat dihubungi dari browser.'));
+      xhr.ontimeout=()=>reject(new Error('Upload UGUU terlalu lama.'));
+      xhr.onload=()=>{
+        let data=null;try{data=JSON.parse(xhr.responseText);}catch(_){}
+        if(xhr.status>=200&&xhr.status<300&&data?.files?.[0]?.url)return resolve(data.files[0].url);
+        reject(new Error((data&&data.error)||'UGUU gagal mengembalikan link video.'));
+      };
+      xhr.send(form);
+    });
+  }
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST',VIDEO_UPLOAD_APIS.gobox,true);
+    xhr.timeout=90000;
+    xhr.setRequestHeader('Content-Type','application/octet-stream');
+    xhr.setRequestHeader('X-File-Name',encodeURIComponent(file.name));
+    xhr.setRequestHeader('X-File-Type',file.type);
+    xhr.setRequestHeader('X-Provider','gobox');
+    xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(e.loaded/e.total);};
+    xhr.onerror=()=>reject(new Error('Tidak bisa terhubung ke GOBOX.'));
+    xhr.ontimeout=()=>reject(new Error('Upload GOBOX terlalu lama.'));
+    xhr.onload=()=>{
+      let data=null;try{data=JSON.parse(xhr.responseText);}catch(_){}
+      if(xhr.status===413)return reject(new Error('GOBOX maksimal 4 MB melalui HidzImage.'));
+      if(xhr.status>=200&&xhr.status<300&&data?.url)return resolve(data.url);
+      reject(new Error((data&&data.error)||'GOBOX gagal mengembalikan link video.'));
     };
-    xhr.onerror = () => reject(new Error('Tidak bisa terhubung ke layanan video. Coba lagi.'));
-    xhr.ontimeout = () => reject(new Error('Upload terlalu lama. Coba lagi.'));
-
-    xhr.onload = () => {
-      let data = null;
-      try { data = JSON.parse(xhr.responseText); } catch (_) {}
-
-      if (xhr.status < 200 || xhr.status >= 300) {
-        const msg = data?.error?.message || data?.message || data?.error || xhr.responseText;
-        reject(new Error(String(msg || 'Upload gagal.').slice(0, 300)));
-        return;
-      }
-
-      const link = provider === 'fileio'
-        ? data?.link
-        : data?.files?.[0]?.url;
-
-      if (link && /^https?:\/\//i.test(link)) {
-        resolve(link);
-        return;
-      }
-
-      reject(new Error('Upload selesai tetapi link video tidak ditemukan.'));
-    };
-
-    xhr.send(form);
+    xhr.send(file);
   });
 }
 
@@ -466,6 +486,7 @@ function uploadFile(file, provider, onProgress) {
 const GAGAL = { enhance: 'GAGAL MEMPERJELAS', kompres: 'GAGAL KOMPRES', dimensi: 'GAGAL UBAH DIMENSI', upload: 'GAGAL UPLOAD' };
 
 $('vProcessBtn').addEventListener('click', async () => {
+  if (state.tab==='upload' && state.provider==='uploadee') { updateVideoProviderView(); return; }
   if (!state.file || state.busy) return;
   const tab = state.tab;
   state.busy = true;
