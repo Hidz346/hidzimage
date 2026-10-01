@@ -656,12 +656,12 @@ $('dNewBtn').addEventListener('click',()=>{
 
 /* ═══════════════════════════════════════════════
    TAB 4 — UPLOAD KE LINK
-   Upload foto ke Uguu lewat proxy /api/upload
+   Upload foto ke Gobox / Uguu / Upload.ee
    ═══════════════════════════════════════════════ */
 
 const UPLOAD_ENDPOINT  = '/api/upload';
-const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;   // batas body request fungsi serverless
-const UPLOAD_LABELS    = { gobox:'GOBOX', uguu:'UGUU' };
+const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;   // batas jalur Gobox via HidzImage
+const UPLOAD_LABELS    = { gobox:'GOBOX', uguu:'UGUU', uploadee:'UPLOAD.EE' };
 
 let uFile=null, uProvider='gobox', uResultLink=null;
 
@@ -687,6 +687,20 @@ function uLoad(file){
   uFile=file;
   $('uFileName').textContent=file.name+' · '+fmtSize(file.size);
   uShowOnly('uSettings');
+  uUpdateProviderView();
+}
+
+function uUpdateProviderView(){
+  const external=$('uUploadEeWrap');
+  const button=$('uProcessBtn');
+  if(!external||!button) return;
+  const isExternal=uProvider==='uploadee';
+  external.classList.toggle('hidden', !isExternal);
+  button.classList.toggle('hidden', isExternal);
+  if(isExternal){
+    $('uProgSub').textContent='gunakan uploader resmi Upload.ee di panel ini';
+    external.scrollIntoView({behavior:'smooth', block:'center'});
+  }
 }
 
 /* Pilih layanan upload */
@@ -698,10 +712,12 @@ uProviderBtns.forEach(b=>b.addEventListener('click',()=>{
     x.setAttribute('aria-checked',on);
   });
   uProvider=b.dataset.provider;
+  uUpdateProviderView();
 }));
 
 /** Foto yang melebihi batas request dikecilkan dulu (JPEG) supaya tidak ditolak server. */
 async function uFitForUpload(file){
+  if(uProvider==='uguu') return file;
   if(file.size<=UPLOAD_MAX_BYTES) return file;
   if(file.type==='image/gif') throw new Error('GIF di atas 4 MB tidak bisa diupload. Kecilkan dulu ukurannya.');
 
@@ -722,7 +738,62 @@ async function uFitForUpload(file){
   throw new Error('Foto terlalu besar untuk diupload.');
 }
 
-/** Kirim file ke /api/upload, kembalikan URL hasil. onProgress menerima 0..1. */
+function uUploadUguu(file,onProgress){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    const form=new FormData();
+    form.append('files[]', file, file.name);
+    xhr.open('POST','https://uguu.se/upload',true);
+    xhr.timeout=0;
+    xhr.upload.onprogress=e=>{ if(e.lengthComputable) onProgress(e.loaded/e.total); };
+    xhr.onerror=()=>reject(new Error('UGUU tidak dapat dihubungi dari browser.'));
+    xhr.ontimeout=()=>reject(new Error('Upload UGUU terlalu lama.'));
+    xhr.onload=()=>{
+      let data=null;
+      try{ data=JSON.parse(xhr.responseText); }catch(e){}
+      if(xhr.status>=200&&xhr.status<300&&data?.files?.[0]?.url) return resolve(data.files[0].url);
+      reject(new Error((data&&data.error)||'UGUU gagal mengembalikan link.'));
+    };
+    xhr.send(form);
+  });
+}
+
+async function uUploadFile(file, provider, onProgress){
+  if(provider==='uguu'){
+    try{
+      return await uUploadUguu(file,onProgress);
+    }catch(err){
+      if(file.size<=UPLOAD_MAX_BYTES){
+        return await uUploadFile(file,'gobox-uguu-fallback',onProgress);
+      }
+      throw err;
+    }
+  }
+
+  return await new Promise((resolve, reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST', UPLOAD_ENDPOINT);
+    xhr.timeout=60000;
+    xhr.setRequestHeader('Content-Type','application/octet-stream');
+    xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
+    xhr.setRequestHeader('X-File-Type', file.type);
+    xhr.setRequestHeader('X-Provider', provider==='gobox-uguu-fallback'?'uguu':provider);
+    xhr.upload.onprogress=e=>{ if(e.lengthComputable) onProgress(e.loaded/e.total); };
+    xhr.onerror  =()=>reject(new Error('Tidak bisa terhubung ke server. Cek koneksi internet.'));
+    xhr.ontimeout=()=>reject(new Error('Upload terlalu lama. Coba lagi.'));
+    xhr.onload=()=>{
+      let data=null;
+      try{ data=JSON.parse(xhr.responseText); }catch(e){}
+      if(xhr.status===413) return reject(new Error('Ukuran file terlalu besar untuk jalur proxy.'));
+      if(xhr.status>=200&&xhr.status<300&&data&&data.url) return resolve(data.url);
+      reject(new Error((data&&data.error)||'Upload gagal (kode '+xhr.status+'). Coba lagi.'));
+    };
+    xhr.send(file);
+  });
+}
+
+/** legacy comment marker retained for compatibility */
+function _uUploadFileLegacy(file,provider,onProgress){
 function uUploadFile(file, provider, onProgress){
   return new Promise((resolve, reject)=>{
     const xhr=new XMLHttpRequest();
@@ -750,8 +821,7 @@ function uUploadFile(file, provider, onProgress){
 /* Process — upload */
 $('uProcessBtn').addEventListener('click', async()=>{
   if (uProvider === 'uploadee') {
-    window.open('https://www.upload.ee/?lng=eng&page=uploadsimple', '_blank', 'noopener');
-    showAlert('Upload.ee dibuka di tab baru karena layanan ini tidak menyediakan API upload anonim yang terdokumentasi untuk integrasi langsung. Pilih file di uploader Upload.ee tersebut.', 'UPLOAD.EE');
+    uUpdateProviderView();
     return;
   }
   if(!uFile) return;
