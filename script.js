@@ -1,7 +1,7 @@
 /**
  * HidzImage v4 — script.js
- * Fitur: HD Enhance · Kompres Ukuran File · Ubah Dimensi Piksel · Upload ke Link
- * Tiga fitur pertama berjalan penuh di browser (Canvas API).
+ * Fitur: HD Enhance · Kompres Ukuran File · Ubah Dimensi Piksel · Putar & Balik · Upload ke Link
+ * Semua fitur selain upload berjalan penuh di browser (Canvas API).
  * Upload ke Link lewat endpoint /api/upload (lihat api/upload.js).
  */
 
@@ -116,6 +116,7 @@ const TABS = {
   enhance: $('tabEnhance'),
   kompres: $('tabKompres'),
   dimensi: $('tabDimensi'),
+  putar:   $('tabPutar'),
   upload:  $('tabUpload'),
 };
 
@@ -858,4 +859,147 @@ $('uOpenBtn').addEventListener('click', ()=>{
 $('uNewBtn').addEventListener('click', ()=>{
   $('uFileInput').value=''; uFile=null; uResultLink=null;
   uShowOnly('uUpload');
+});
+
+
+/* ═══════════════════════════════════════════════
+   TAB 5 — PUTAR & BALIK
+   Foto dibalik (flipX/flipY) lalu diputar searah jarum jam kelipatan 90°.
+   Piksel tidak diubah, hanya posisinya, jadi tidak ada kehilangan ketajaman.
+   ═══════════════════════════════════════════════ */
+
+let rFile=null, rOrigURL=null, rBlobURL=null, rImg=null, rOutName='hidzimage-putar.png';
+let rTurns=0, rFlipX=1, rFlipY=1, rFmt='png';
+
+function rShowOnly(id){
+  ['rUpload','rSettings','rResult'].forEach(s=>$(s).classList.add('hidden'));
+  $(id).classList.remove('hidden');
+}
+
+/* Upload */
+$('rUploadBtn').addEventListener('click', e=>{e.stopPropagation();$('rFileInput').click();});
+$('rUploadZone').addEventListener('click',  ()=>$('rFileInput').click());
+$('rChangeBtn').addEventListener('click',   ()=>$('rFileInput').click());
+$('rUploadZone').addEventListener('dragover',  e=>{e.preventDefault();$('rUploadZone').classList.add('drag-over');});
+$('rUploadZone').addEventListener('dragleave', ()=>$('rUploadZone').classList.remove('drag-over'));
+$('rUploadZone').addEventListener('drop', e=>{
+  e.preventDefault();$('rUploadZone').classList.remove('drag-over');
+  if(e.dataTransfer.files[0]) rLoad(e.dataTransfer.files[0]);
+});
+$('rFileInput').addEventListener('change',()=>{if($('rFileInput').files[0]) rLoad($('rFileInput').files[0]);});
+
+function rSyncFormat(){
+  document.querySelectorAll('#rFmtGroup .scale-opt').forEach(b=>b.classList.toggle('active',b.dataset.f===rFmt));
+}
+
+async function rLoad(file){
+  if(!file.type.startsWith('image/')){showAlert('Harap pilih file gambar.');return;}
+  const url=URL.createObjectURL(file);
+  let img;
+  try{ img=await loadImg(url); }
+  catch(_){ URL.revokeObjectURL(url); showAlert('Foto tidak bisa dibaca. Coba file lain.','GAGAL MEMUAT'); return; }
+  if(rOrigURL) URL.revokeObjectURL(rOrigURL);
+  rFile=file; rOrigURL=url; rImg=img;
+  rTurns=0; rFlipX=1; rFlipY=1;
+  rFmt=file.type==='image/jpeg'?'jpg':file.type==='image/webp'?'webp':'png';   // default: format asli
+  rSyncFormat();
+  $('rPreviewImg').src=url;
+  $('rFileName').textContent=file.name+' · '+fmtSize(file.size);
+  $('rFileInput').value='';
+  rShowOnly('rSettings');
+  rUpdateView();
+}
+
+function rCurrentTf(){
+  let rot=(((rTurns%4)+4)%4)*90, fx=rFlipX, fy=rFlipY;
+  if(fx<0&&fy<0){ rot=(rot+180)%360; fx=fy=1; }    // dibalik dua arah sama dengan putar 180°
+  return {rot, fx, fy, same: rot===0&&fx>0&&fy>0};
+}
+
+/* Keterangan hasil + pratinjau berputar. Pratinjau memakai CSS transform, jadi seketika dan gratis. */
+function rUpdateView(){
+  if(!rImg) return;
+  const nw=rImg.naturalWidth, nh=rImg.naturalHeight, turned=rTurns%2!==0;
+  $('rNote').textContent=(rCurrentTf().same?'belum ada perubahan':'siap diterapkan')+` · hasil ${turned?nh:nw} × ${turned?nw:nh} px`;
+  const img=$('rPreviewImg');
+  img.style.transform='';
+  if(!img.clientWidth||!img.clientHeight) return;
+  const bw=img.clientWidth, bh=img.clientHeight, fit=Math.min(bw/nw,bh/nh);
+  const cw=nw*fit, ch=nh*fit;
+  const k=turned?Math.min(bw/ch,bh/cw):1;          // putaran 90°/270° disesuaikan agar muat di kotak pratinjau
+  img.style.transform=`rotate(${rTurns*90}deg) scale(${k*rFlipX},${k*rFlipY})`;
+}
+$('rPreviewImg').addEventListener('load', rUpdateView);
+window.addEventListener('resize', ()=>{ if(!$('rSettings').classList.contains('hidden')) rUpdateView(); });
+
+/* Balik "horizontal"/"vertikal" mengikuti apa yang terlihat; setelah diputar 90° sumbunya tertukar. */
+function rFlipVisible(axis){
+  if((axis==='h')!==(rTurns%2!==0)) rFlipX*=-1; else rFlipY*=-1;
+  rUpdateView();
+}
+$('rRotL').addEventListener('click',  ()=>{rTurns-=1;rUpdateView();});
+$('rRotR').addEventListener('click',  ()=>{rTurns+=1;rUpdateView();});
+$('rRot180').addEventListener('click',()=>{rTurns+=2;rUpdateView();});
+$('rReset').addEventListener('click', ()=>{rTurns=0;rFlipX=1;rFlipY=1;rUpdateView();});
+$('rFlipH').addEventListener('click', ()=>rFlipVisible('h'));
+$('rFlipV').addEventListener('click', ()=>rFlipVisible('v'));
+document.querySelectorAll('#rFmtGroup .scale-opt').forEach(b=>b.addEventListener('click',()=>{
+  rFmt=b.dataset.f; rSyncFormat();
+}));
+
+/* Process */
+$('rProcessBtn').addEventListener('click', async()=>{
+  if(!rFile||!rImg) return;
+  const {rot, fx, fy, same}=rCurrentTf();
+  if(same){ showAlert('Belum ada perubahan. Pilih putar atau balik dulu.'); return; }
+
+  const btn=$('rProcessBtn');
+  btn.disabled=true;
+  try{
+    const nw=rImg.naturalWidth, nh=rImg.naturalHeight, turned=rot%180!==0;
+    const w=turned?nh:nw, h=turned?nw:nh;
+    const cv=document.createElement('canvas');
+    cv.width=w; cv.height=h;
+    const ctx=cv.getContext('2d');
+    const mime={png:'image/png',jpg:'image/jpeg',webp:'image/webp'}[rFmt];
+    if(rFmt==='jpg'){ ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,w,h); }   // JPG tidak punya transparansi
+    ctx.translate(w/2,h/2);
+    ctx.rotate(rot*Math.PI/180);
+    ctx.scale(fx,fy);
+    ctx.drawImage(rImg,-nw/2,-nh/2,nw,nh);
+
+    const blob=await new Promise(res=>cv.toBlob(res,mime,0.95));
+    if(!blob) throw new Error('Foto terlalu besar untuk diproses di browser ini. Coba foto yang lebih kecil.');
+    const ext=blob.type==='image/jpeg'?'jpg':blob.type==='image/webp'?'webp':'png';   // browser bisa menolak WEBP
+    if(rBlobURL) URL.revokeObjectURL(rBlobURL);
+    rBlobURL=URL.createObjectURL(blob);
+    rOutName=`hidzimage-putar.${ext}`;
+    $('rResultImg').src=rBlobURL;
+    $('rResultChips').innerHTML=[
+      rot?`<span class="chip chip-pink">PUTAR ${rot}°</span>`:'',
+      (fx<0||fy<0)?'<span class="chip chip-cyan">DIBALIK ⇋</span>':'',
+      `<span class="chip chip-green">${w}×${h} px</span>`,
+      `<span class="chip chip-plain">${fmtSize(blob.size)}</span>`,
+      `<span class="chip chip-plain">${ext.toUpperCase()}</span>`,
+    ].join('');
+    rShowOnly('rResult');
+  }catch(err){
+    showAlert(err.message||'Terjadi kesalahan. Coba lagi.','GAGAL MEMUTAR');
+  }finally{
+    btn.disabled=false;
+  }
+});
+
+$('rDownloadBtn').addEventListener('click',()=>{
+  if(!rBlobURL) return;
+  const a=document.createElement('a'); a.href=rBlobURL; a.download=rOutName; a.click();
+});
+$('rEditAgainBtn').addEventListener('click',()=>{ rShowOnly('rSettings'); rUpdateView(); });
+$('rNewBtn').addEventListener('click',()=>{
+  $('rFileInput').value=''; rFile=null; rImg=null;
+  $('rPreviewImg').removeAttribute('src');
+  $('rResultImg').removeAttribute('src');
+  if(rOrigURL){URL.revokeObjectURL(rOrigURL);rOrigURL=null;}
+  if(rBlobURL){URL.revokeObjectURL(rBlobURL);rBlobURL=null;}
+  rShowOnly('rUpload');
 });

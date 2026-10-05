@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
   <title>HidzImage — Video Tools</title>
   <link rel="icon" href="https://www.gobox.my.id/file/IcHjU.png"/>
-  <link rel="stylesheet" href="style.css?v=20261001-1600"/>
+  <link rel="stylesheet" href="style.css?v=20261005-1800"/>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 </head>
 <body>
@@ -34,10 +34,15 @@
 <main>
 <div class="page">
 
-  <div class="tab-bar">
+  <div class="tab-bar tab-bar-grid">
     <button class="tab-btn active" data-tab="enhance">✦ HD<br>ENHANCE</button>
     <button class="tab-btn" data-tab="kompres">⚡ KOMPRES<br>UKURAN</button>
     <button class="tab-btn" data-tab="dimensi">↔ UBAH<br>DIMENSI</button>
+    <button class="tab-btn" data-tab="potong">✂ POTONG<br>VIDEO</button>
+    <button class="tab-btn" data-tab="kecepatan">⏱ UBAH<br>KECEPATAN</button>
+    <button class="tab-btn" data-tab="putar">⟲ PUTAR<br>&amp; BALIK</button>
+    <button class="tab-btn" data-tab="frame">🖼 AMBIL<br>FRAME</button>
+    <button class="tab-btn" data-tab="audio">🎵 EKSTRAK<br>AUDIO</button>
     <button class="tab-btn" data-tab="upload">☁ UPLOAD<br>KE LINK</button>
   </div>
 
@@ -56,7 +61,7 @@
   <!-- Pengaturan -->
   <section id="vSettings" class="editor-wrap hidden">
     <div class="card preview-card">
-      <div class="preview-img-wrap"><video id="vPreview" class="vid" controls playsinline muted></video></div>
+      <div class="preview-img-wrap"><video id="vPreview" class="vid tf-preview" controls playsinline muted></video></div>
       <div class="preview-bar">
         <span class="fname" id="vFileName">—</span>
         <button class="btn-change" id="vChangeBtn">↺ GANTI</button>
@@ -111,6 +116,82 @@
         <p class="process-note" id="vRatioNote">🔒 rasio aspek terkunci</p>
       </div>
 
+      <!-- Potong -->
+      <div id="pPotong" class="hidden">
+        <div class="sec-label">Potong Durasi</div>
+        <div class="slider-row"><span class="slider-lbl">AWAL <span id="vTrimStartV">0:00.0</span></span>
+          <input type="range" id="vTrimStart" min="0" max="1" step="0.01" value="0"/></div>
+        <div class="slider-row"><span class="slider-lbl">AKHIR <span id="vTrimEndV">0:00.0</span></span>
+          <input type="range" id="vTrimEnd" min="0" max="1" step="0.01" value="1"/></div>
+        <div class="scale-group">
+          <button class="scale-opt" id="vTrimMarkStart">⇤ AWAL DI SINI</button>
+          <button class="scale-opt" id="vTrimMarkEnd">AKHIR DI SINI ⇥</button>
+        </div>
+        <div class="scale-group">
+          <button class="scale-opt" id="vTrimPlay">▶ PUTAR POTONGAN</button>
+        </div>
+        <p class="process-note" id="vTrimNote">hasil —</p>
+      </div>
+
+      <!-- Kecepatan -->
+      <div id="pKecepatan" class="hidden">
+        <div class="sec-label">Kecepatan Video</div>
+        <div class="scale-group" id="vRateGroup">
+          <button class="scale-opt" data-v="0.25">0.25×</button>
+          <button class="scale-opt" data-v="0.5">0.5×</button>
+          <button class="scale-opt" data-v="1.5">1.5×</button>
+          <button class="scale-opt active" data-v="2">2×</button>
+          <button class="scale-opt" data-v="4">4×</button>
+        </div>
+        <p class="process-note" id="vRateNote">durasi hasil —</p>
+        <p class="process-note">gerak lambat memakai frame asli, paling halus pada video 60 fps</p>
+      </div>
+
+      <!-- Putar & Balik -->
+      <div id="pPutar" class="hidden">
+        <div class="sec-label">Putar &amp; Balik</div>
+        <div class="group-label">putar</div>
+        <div class="scale-group">
+          <button class="scale-opt" id="vRotL">↺ 90°</button>
+          <button class="scale-opt" id="vRotR">↻ 90°</button>
+          <button class="scale-opt" id="vRot180">180°</button>
+          <button class="scale-opt" id="vTfReset">✕ RESET</button>
+        </div>
+        <div class="group-label">balik</div>
+        <div class="scale-group">
+          <button class="scale-opt" id="vFlipH">⇋ HORIZONTAL</button>
+          <button class="scale-opt" id="vFlipV">⇅ VERTIKAL</button>
+        </div>
+        <p class="process-note" id="vTfNote">belum ada perubahan</p>
+      </div>
+
+      <!-- Ambil frame -->
+      <div id="pFrame" class="hidden">
+        <div class="sec-label">Ambil Frame</div>
+        <div class="dim-info" id="vFrameInfo">Posisi —</div>
+        <div class="scale-group">
+          <button class="scale-opt" id="vFramePrev">◀ −1 FRAME</button>
+          <button class="scale-opt" id="vFrameNext">+1 FRAME ▶</button>
+        </div>
+        <div class="group-label">format gambar</div>
+        <div class="scale-group" id="vFrameFmt">
+          <button class="scale-opt active" data-f="png">PNG</button>
+          <button class="scale-opt" data-f="jpg">JPG</button>
+        </div>
+        <p class="process-note">geser pemutar ke adegan yang diinginkan, lalu ambil</p>
+      </div>
+
+      <!-- Ekstrak audio -->
+      <div id="pAudio" class="hidden">
+        <div class="sec-label">Ekstrak Audio</div>
+        <div class="group-label">saluran suara</div>
+        <div class="scale-group" id="vAudioCh">
+          <button class="scale-opt active" data-c="2">STEREO</button>
+          <button class="scale-opt" data-c="1">MONO</button>
+        </div>
+        <p class="process-note" id="vAudioNote">WAV tanpa kompresi</p>
+      </div>
+
       <!-- Upload ke link -->
       <div id="pUpload" class="hidden">
         <div class="sec-label">Layanan Upload</div>
@@ -161,7 +242,11 @@
   <section id="vResult" class="hidden">
     <div class="card result-card">
       <div class="result-head"><h2 id="vResultTitle">VIDEO SELESAI DIPROSES</h2><span class="badge-done">✓ DONE</span></div>
-      <div id="vOutWrap" class="cmp-wrap vid-out"><video id="vOut" class="vid" controls playsinline></video></div>
+      <div id="vOutWrap" class="cmp-wrap vid-out">
+        <video id="vOut" class="vid" controls playsinline></video>
+        <img id="vFrameOut" class="vid hidden" alt="Frame hasil"/>
+        <audio id="vAudioOut" class="aud hidden" controls></audio>
+      </div>
       <div class="result-chips" id="vResultChips"></div>
       <div class="link-box hidden" id="vLinkBox"><span id="vLinkText">—</span></div>
       <div class="result-actions">
@@ -202,6 +287,6 @@
   b.addEventListener('click',function(){a(!document.body.classList.contains('dark'));});
 })();
 </script>
-<script src="video.js?v=20261001-1600"></script>
+<script src="video.js?v=20261005-1800"></script>
 </body>
 </html>

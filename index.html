@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
   <title>HidzImage — HD Enhancer</title>
   <link rel="icon" href="https://www.gobox.my.id/file/IcHjU.png"/>
-  <link rel="stylesheet" href="style.css?v=20261001-1600"/>
+  <link rel="stylesheet" href="style.css?v=20261005-1800"/>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 </head>
 <body>
@@ -38,10 +38,11 @@
 <div class="page">
 
   <!-- ── TAB BAR ──────────────────────────── -->
-  <div class="tab-bar">
+  <div class="tab-bar tab-bar-5">
     <button class="tab-btn active" data-tab="enhance">✦ HD<br>ENHANCE</button>
     <button class="tab-btn" data-tab="kompres">⚡ KOMPRES<br>UKURAN</button>
     <button class="tab-btn" data-tab="dimensi">↔ UBAH<br>DIMENSI</button>
+    <button class="tab-btn" data-tab="putar">⟲ PUTAR<br>&amp; BALIK</button>
     <button class="tab-btn" data-tab="upload">☁ UPLOAD<br>KE LINK</button>
   </div>
 
@@ -439,6 +440,83 @@
 
   </div><!-- /tabUpload -->
 
+  <!-- ══════════════════════════════════════
+       TAB 5 — PUTAR & BALIK
+       ══════════════════════════════════════ -->
+  <div id="tabPutar" class="hidden">
+
+    <!-- R-S0: Upload -->
+    <section id="rUpload">
+      <div class="upload-zone" id="rUploadZone">
+        <div class="upload-emoji">⟲</div>
+        <h2>PUTAR &amp; BALIK FOTO</h2>
+        <p>Putar kelipatan 90° atau balik horizontal &amp; vertikal</p>
+        <p class="upload-hint">JPG · PNG · WEBP</p>
+        <button class="btn-pick" id="rUploadBtn">↑ PILIH FOTO</button>
+      </div>
+      <input type="file" id="rFileInput" accept="image/*" hidden/>
+    </section>
+
+    <!-- R-S1: Settings -->
+    <section id="rSettings" class="editor-wrap hidden">
+      <div class="card preview-card">
+        <div class="preview-img-wrap">
+          <img id="rPreviewImg" class="tf-preview" src="" alt="Preview"/>
+        </div>
+        <div class="preview-bar">
+          <span class="fname" id="rFileName">—</span>
+          <button class="btn-change" id="rChangeBtn">↺ GANTI</button>
+        </div>
+      </div>
+      <div class="card controls-card">
+        <div class="sec-label">Putar &amp; Balik</div>
+        <div class="group-label">putar</div>
+        <div class="scale-group">
+          <button class="scale-opt" id="rRotL">↺ 90°</button>
+          <button class="scale-opt" id="rRotR">↻ 90°</button>
+          <button class="scale-opt" id="rRot180">180°</button>
+          <button class="scale-opt" id="rReset">✕ RESET</button>
+        </div>
+        <div class="group-label">balik</div>
+        <div class="scale-group">
+          <button class="scale-opt" id="rFlipH">⇋ HORIZONTAL</button>
+          <button class="scale-opt" id="rFlipV">⇅ VERTIKAL</button>
+        </div>
+        <div class="group-label">format hasil</div>
+        <div class="scale-group" id="rFmtGroup">
+          <button class="scale-opt active" data-f="png">PNG</button>
+          <button class="scale-opt" data-f="jpg">JPG</button>
+          <button class="scale-opt" data-f="webp">WEBP</button>
+        </div>
+        <p class="process-note" id="rNote" style="margin-bottom:12px">belum ada perubahan</p>
+        <div class="process-wrap" style="margin-top:4px">
+          <button class="btn btn-pink btn-block" id="rProcessBtn">⟲ TERAPKAN SEKARANG</button>
+          <p class="process-note">semua berjalan di browser · piksel foto tidak diubah</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- R-S2: Result -->
+    <section id="rResult" class="hidden">
+      <div class="card result-card">
+        <div class="result-head">
+          <h2>FOTO BERHASIL DIUBAH</h2>
+          <span class="badge-done">✓ DONE</span>
+        </div>
+        <div class="cmp-wrap vid-out">
+          <img id="rResultImg" class="vid" src="" alt="Hasil"/>
+        </div>
+        <div class="result-chips" id="rResultChips"></div>
+        <div class="result-actions">
+          <button class="btn btn-green  btn-block" id="rDownloadBtn">⬇ DOWNLOAD</button>
+          <button class="btn btn-cyan   btn-block" id="rEditAgainBtn">✏ UBAH LAGI</button>
+          <button class="btn btn-yellow btn-block" id="rNewBtn">📷 FOTO BARU</button>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /tabPutar -->
+
 </div><!-- /page -->
 </main>
 
@@ -461,6 +539,6 @@
   b.addEventListener('click',function(){a(!document.body.classList.contains('dark'));});
 })();
 </script>
-<script src="script.js?v=20261001-1600"></script>
+<script src="script.js?v=20261005-1800"></script>
 </body>
 </html>
