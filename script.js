@@ -207,6 +207,7 @@ $('eProcessBtn').addEventListener('click', async()=>{
       contrast:+$('sContrast').value, saturation:+$('sSaturate').value};
     const {canvas,info} = await enhancePipeline(eFile, opts, eProg);
     const blob = await new Promise(res=>canvas.toBlob(res,'image/png'));
+    if(!blob) throw new Error('Foto terlalu besar untuk diproses di browser ini. Coba skala lebih kecil atau foto yang lebih kecil.');
     if(eBlobURL) URL.revokeObjectURL(eBlobURL);
     eBlobURL=URL.createObjectURL(blob);
     $('eCmpSpacer').src=$('eCmpBefore').src=eOrigURL;
@@ -221,7 +222,7 @@ $('eProcessBtn').addEventListener('click', async()=>{
     ].join('');
     eShowOnly('eResult');
     initCmp('eCmpWrap','eCmpAfter','eCmpHandle');
-  } catch(err){ showAlert(err.message, 'GAGAL MEMPERJELAS'); eShowOnly('eEditor'); }
+  } catch(err){ showAlert(err.message, 'GAGAL MEMPERJELAS'); eShowOnly('eEditor'); eUpdatePreview(); }
 });
 
 $('eDownloadBtn').addEventListener('click', ()=>{
@@ -250,12 +251,12 @@ async function enhancePipeline(file, opts, onProg) {
   const outW=canvas.width,outH=canvas.height;
   onProg(30,'MENGAMBIL DATA',`${outW}×${outH}`,'💾'); await sleep(DELAY);
   const ctx=canvas.getContext('2d');
-  let d=ctx.getImageData(0,0,outW,outH);
-  if(denoise>0){ onProg(42,'DENOISE','','🌫️'); await sleep(DELAY); d=boxBlur(d,Math.max(1,Math.round(denoise/35))); }
-  if(brightness!==0||contrast!==0){ onProg(55,'BRIGHTNESS/KONTRAS','','☀️'); await sleep(DELAY); d=applyBC(d,brightness,contrast); }
-  if(saturation!==0){ onProg(65,'SATURASI','','🎨'); await sleep(DELAY); d=applySat(d,saturation); }
-  if(sharpen>0){ onProg(75,'MEMPERTAJAM',`${sharpen}%`,'✦'); await sleep(DELAY); d=applySharpen(d,sharpen/200); }
-  if(clarity>0){ onProg(87,'CLARITY',`${clarity}%`,'💎'); await sleep(DELAY); d=applyClarity(d,clarity/150); }
+  const d=ctx.getImageData(0,0,outW,outH);   // semua filter di bawah mengubah d langsung (hemat memori)
+  if(denoise>0){ onProg(42,'DENOISE','','🌫️'); await sleep(DELAY); boxBlur(d,Math.max(1,Math.round(denoise/35))); }
+  if(brightness!==0||contrast!==0){ onProg(55,'BRIGHTNESS/KONTRAS','','☀️'); await sleep(DELAY); applyBC(d,brightness,contrast); }
+  if(saturation!==0){ onProg(65,'SATURASI','','🎨'); await sleep(DELAY); applySat(d,saturation); }
+  if(sharpen>0){ onProg(75,'MEMPERTAJAM',`${sharpen}%`,'✦'); await sleep(DELAY); applySharpen(d,sharpen/200); }
+  if(clarity>0){ onProg(87,'CLARITY',`${clarity}%`,'💎'); await sleep(DELAY); applyClarity(d,clarity/150); }
   onProg(95,'MENYIMPAN','','💾'); await sleep(DELAY);
   ctx.putImageData(d,0,0);
   onProg(100,'SELESAI!','','✅'); await sleep(200);
@@ -275,35 +276,71 @@ async function eUpscale(img,inW,inH,scale){
   return cur;
 }
 
-function boxBlur(d,r){
-  const{width:W,height:H,data}=d;const out=new Uint8ClampedArray(data.length);const tmp=new Float32Array(data.length);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){let R=0,G=0,B=0,n=0;
-    for(let dx=-r;dx<=r;dx++){const nx=clamp(x+dx,0,W-1);const i=(y*W+nx)*4;R+=data[i];G+=data[i+1];B+=data[i+2];n++;}
-    const i=(y*W+x)*4;tmp[i]=R/n;tmp[i+1]=G/n;tmp[i+2]=B/n;tmp[i+3]=data[i+3];}
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){let R=0,G=0,B=0,n=0;
-    for(let dy=-r;dy<=r;dy++){const ny=clamp(y+dy,0,H-1);const i=(ny*W+x)*4;R+=tmp[i];G+=tmp[i+1];B+=tmp[i+2];n++;}
-    const i=(y*W+x)*4;out[i]=R/n;out[i+1]=G/n;out[i+2]=B/n;out[i+3]=data[i+3];}
-  return new ImageData(out,W,H);
+/* ─── Filter piksel ──────────────────────────────
+   Semua filter mengubah ImageData langsung dan hanya memakai buffer kecil per baris.
+   Versi lama membuat salinan penuh tiap filter (blur sampai ±270 MB di foto 4096 px),
+   yang membuat browser ponsel kehabisan memori. Hasil pikselnya tetap sama. */
+
+/** Blur kotak (radius r, tepi dijepit) per baris; emit(y, jumlah, n) dipanggil sebelum baris y ditimpa. */
+function blurRows(d,r,emit){
+  const{width:W,height:H,data}=d;
+  const n=2*r+1,ring=n+1,stride=W*3;
+  const rows=new Float32Array(ring*stride);     // jendela baris yang sudah di-blur horizontal
+  const sum=new Float64Array(stride);           // jumlah vertikal berjalan
+  let next=0;
+  const loadRow=y=>{
+    const o=(y%ring)*stride,base=y*W*4;
+    for(let c=0;c<3;c++){
+      let s=0;
+      for(let dx=-r;dx<=r;dx++)s+=data[base+clamp(dx,0,W-1)*4+c];
+      for(let x=0;x<W;x++){
+        rows[o+x*3+c]=s/n;
+        s+=data[base+Math.min(x+r+1,W-1)*4+c]-data[base+Math.max(x-r,0)*4+c];
+      }
+    }
+    next=y+1;
+  };
+  for(let y=0;y<=Math.min(r,H-1);y++)loadRow(y);
+  for(let dy=-r;dy<=r;dy++){
+    const o=(clamp(dy,0,H-1)%ring)*stride;
+    for(let k=0;k<stride;k++)sum[k]+=rows[o+k];
+  }
+  for(let y=0;y<H;y++){
+    emit(y,sum,n);
+    if(y===H-1)break;
+    const enter=Math.min(y+r+1,H-1);
+    if(enter>=next)loadRow(enter);
+    const oi=(enter%ring)*stride,oo=(Math.max(y-r,0)%ring)*stride;
+    for(let k=0;k<stride;k++)sum[k]+=rows[oi+k]-rows[oo+k];
+  }
 }
-function applyBC(d,b,c){const{width:W,height:H,data}=d;const out=new Uint8ClampedArray(data.length);
+function boxBlur(d,r){
+  const{width:W,data}=d;
+  blurRows(d,r,(y,sum,n)=>{
+    for(let x=0,i=y*W*4;x<W;x++,i+=4){data[i]=sum[x*3]/n;data[i+1]=sum[x*3+1]/n;data[i+2]=sum[x*3+2]/n;}
+  });
+}
+function applyBC(d,b,c){const{data}=d;
   const bv=(b/60)*80,cv=1+(c/60)*0.75;
-  for(let i=0;i<data.length;i+=4){for(let j=0;j<3;j++)out[i+j]=clamp(Math.round((data[i+j]-128)*cv+128+bv));out[i+3]=data[i+3];}
-  return new ImageData(out,W,H);}
-function applySat(d,s){const{width:W,height:H,data}=d;const out=new Uint8ClampedArray(data.length);const f=1+s/80;
-  for(let i=0;i<data.length;i+=4){const[r,g,b]=[data[i],data[i+1],data[i+2]];const g2=0.299*r+0.587*g+0.114*b;
-    out[i]=clamp(Math.round(g2+f*(r-g2)));out[i+1]=clamp(Math.round(g2+f*(g-g2)));out[i+2]=clamp(Math.round(g2+f*(b-g2)));out[i+3]=data[i+3];}
-  return new ImageData(out,W,H);}
-function applySharpen(d,a){const{width:W,height:H,data}=d;const out=new Uint8ClampedArray(data.length);const ctr=1+4*a;
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4;
-    if(y===0||y===H-1||x===0||x===W-1){out[i]=data[i];out[i+1]=data[i+1];out[i+2]=data[i+2];out[i+3]=data[i+3];continue;}
-    const t=((y-1)*W+x)*4,b=((y+1)*W+x)*4,l=(y*W+(x-1))*4,r=(y*W+(x+1))*4;
-    for(let c=0;c<3;c++)out[i+c]=clamp(Math.round(ctr*data[i+c]-a*(data[t+c]+data[b+c]+data[l+c]+data[r+c])));
-    out[i+3]=data[i+3];}
-  return new ImageData(out,W,H);}
-function applyClarity(d,a){const bl=boxBlur(d,2);const{width:W,height:H,data}=d;const bd=bl.data;
-  const out=new Uint8ClampedArray(data.length);
-  for(let i=0;i<data.length;i+=4){for(let c=0;c<3;c++)out[i+c]=clamp(Math.round(data[i+c]+a*(data[i+c]-bd[i+c])));out[i+3]=data[i+3];}
-  return new ImageData(out,W,H);}
+  for(let i=0;i<data.length;i+=4)for(let j=0;j<3;j++)data[i+j]=clamp(Math.round((data[i+j]-128)*cv+128+bv));}
+function applySat(d,s){const{data}=d;const f=1+s/80;
+  for(let i=0;i<data.length;i+=4){const r=data[i],g=data[i+1],b=data[i+2];const g2=0.299*r+0.587*g+0.114*b;
+    data[i]=clamp(Math.round(g2+f*(r-g2)));data[i+1]=clamp(Math.round(g2+f*(g-g2)));data[i+2]=clamp(Math.round(g2+f*(b-g2)));}}
+function applySharpen(d,a){const{width:W,height:H,data}=d;const ctr=1+4*a,row=W*4;
+  let prev=data.slice(0,row),cur=new Uint8ClampedArray(row);          // salinan asli baris atas & baris ini
+  for(let y=1;y<H-1;y++){
+    const o=y*row,nx=o+row;
+    cur.set(data.subarray(o,nx));
+    for(let x=1;x<W-1;x++){const i=x*4;
+      for(let c=0;c<3;c++)data[o+i+c]=clamp(Math.round(ctr*cur[i+c]-a*(prev[i+c]+data[nx+i+c]+cur[i-4+c]+cur[i+4+c])));}
+    const t=prev;prev=cur;cur=t;
+  }}
+function applyClarity(d,a){const{width:W,data}=d;
+  blurRows(d,2,(y,sum,n)=>{
+    for(let x=0,i=y*W*4;x<W;x++,i+=4)for(let c=0;c<3;c++){
+      const bd=Math.round(sum[x*3+c]/n);
+      data[i+c]=clamp(Math.round(data[i+c]+a*(data[i+c]-bd)));}
+  });}
 
 
 /* ═══════════════════════════════════════════════
@@ -338,8 +375,8 @@ function kLoad(file){
   $('kHint').textContent=`ukuran saat ini: ${fmtSize(file.size)}`;
   // Suggest sensible default target
   const kb=Math.round(file.size/1024);
-  if(kb>=1024){$('kTargetVal').value=Math.round(kb/2);kUnit='KB';$('kUnitKB').classList.add('active');$('kUnitMB').classList.remove('active');}
-  else{$('kTargetVal').value=Math.max(1,Math.round(kb*0.5));kUnit='KB';$('kUnitKB').classList.add('active');$('kUnitMB').classList.remove('active');}
+  $('kTargetVal').value=kb>=1024?Math.round(kb/2):Math.max(1,Math.round(kb*0.5));
+  kUnit='KB';$('kUnitKB').classList.add('active');$('kUnitMB').classList.remove('active');
   kShowOnly('kSettings');
 }
 
@@ -611,6 +648,7 @@ $('dProcessBtn').addEventListener('click', async()=>{
     await sleep(100);
 
     const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
+    if(!blob) throw new Error('Dimensi terlalu besar untuk diproses di browser ini. Coba ukuran yang lebih kecil.');
     if(dBlobURL) URL.revokeObjectURL(dBlobURL);
     dBlobURL=URL.createObjectURL(blob);
 

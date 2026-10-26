@@ -203,6 +203,7 @@ input[type="range"]::-moz-range-thumb{width:18px;height:18px;background:var(--pi
 .prog-sub{font-family:'Space Mono',monospace;font-size:.72rem;color:var(--text-2);
   letter-spacing:.04em;margin-bottom:20px}
 .prog-sub::before{content:'» '}
+.prog-cancel{margin-top:22px;padding:9px 16px;font-size:.78rem}
 .prog-bar-wrap{height:22px;background:var(--surface-alt);
   border:var(--bw) solid var(--ink);border-radius:var(--r);
   overflow:hidden;box-shadow:var(--shadow-sm)}

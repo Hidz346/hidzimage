@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
   <title>HidzImage — Video Tools</title>
   <link rel="icon" href="https://www.gobox.my.id/file/IcHjU.png"/>
-  <link rel="stylesheet" href="style.css?v=20261005-1800"/>
+  <link rel="stylesheet" href="style.css?v=20261027-0600"/>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 </head>
 <body>
@@ -79,6 +79,8 @@
           <button class="scale-opt" data-v="4">4× ULTRA</button>
         </div>
         <div class="group-label">ketajaman &amp; warna</div>
+        <div class="slider-row"><span class="slider-lbl">BERSIH <span id="vCleanV">0</span></span>
+          <input type="range" id="vClean" min="0" max="100" value="0"/><button class="btn-rst" id="vCleanRst" data-t="vClean" data-d="0">↺</button></div>
         <div class="slider-row"><span class="slider-lbl">TAJAM <span id="vSharpenV">40</span></span>
           <input type="range" id="vSharpen" min="0" max="100" value="40"/><button class="btn-rst" data-t="vSharpen" data-d="40">↺</button></div>
         <div class="slider-row"><span class="slider-lbl">TERANG <span id="vBrightV">0</span></span>
@@ -235,6 +237,7 @@
       <div class="prog-title" id="vProgTitle">MEMPROSES</div>
       <div class="prog-sub" id="vProgSub">jangan tutup atau pindah tab browser</div>
       <div class="prog-bar-wrap"><div class="prog-bar" id="vProgBar"></div></div>
+      <button class="btn btn-yellow prog-cancel" id="vCancelBtn">✕ BATALKAN</button>
     </div>
   </section>
 
@@ -287,6 +290,6 @@
   b.addEventListener('click',function(){a(!document.body.classList.contains('dark'));});
 })();
 </script>
-<script src="video.js?v=20261005-1800"></script>
+<script src="video.js?v=20261027-0600"></script>
 </body>
 </html>

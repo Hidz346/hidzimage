@@ -2,8 +2,12 @@
  * HidzImage — video.js
  * Versi video: HD Enhance · Kompres · Ubah Dimensi · Potong · Kecepatan · Putar & Balik ·
  * Ambil Frame · Ekstrak Audio · Upload ke Link
- * Semua pemrosesan berjalan di browser: video diputar ke canvas (HD Enhance memakai GPU/WebGL),
- * lalu direkam ulang dengan MediaRecorder. Karena itu waktu proses kira-kira sama dengan durasi video.
+ * Semua pemrosesan berjalan di browser.
+ * Mesin utama memakai WebCodecs (vendor/mediabunny.min.js): setiap frame dibaca, diproses
+ * (HD Enhance memakai GPU/WebGL), lalu di-encode ulang dengan timestamp aslinya. Tidak berjalan
+ * real-time, jadi frame rate asli terjaga dan bitrate bisa ditentukan sendiri; suara disalin utuh.
+ * Bila browser belum mendukung WebCodecs, proses otomatis memakai mesin cadangan: video diputar ke
+ * canvas lalu direkam ulang dengan MediaRecorder (waktu proses kira-kira sama dengan durasi video).
  * Upload ke Link memakai endpoint yang sama dengan versi foto (/api/upload).
  */
 
@@ -80,12 +84,16 @@ const VIDEO_UPLOAD_APIS = {
 };
 const UPLOAD_ENDPOINT = '/api/upload';
 const UPLOAD_MAX_BYTES = 4 * 1024 * 1024; // batas jalur Gobox via HidzImage
-const FPS = 30;                             // batas frame rate hasil (sumber 60 fps diambil selang-seling)
-/* Sisi terpanjang hasil enhance. Perekaman berjalan real-time, jadi di layar sentuh (HP/tablet) dibatasi
-   Full HD agar encoder sanggup mengejar 30 fps; di komputer boleh sampai 2560. */
+const FPS = 30;                             // mesin cadangan: frame rate hasil (sumber 60 fps diambil selang-seling)
+const MAX_FPS = 60;                         // mesin utama: batas frame rate hasil (sumber 120 fps diambil selang-seling)
+const LIB_URL = 'vendor/mediabunny.min.js?v=1.62.1';
+/* Sisi terpanjang hasil enhance. Mesin utama tidak real-time sehingga HP pun sanggup sampai 2560
+   (otomatis turun bila encoder perangkat menolak); mesin cadangan merekam real-time, jadi di layar
+   sentuh dibatasi Full HD agar encoder sanggup mengejar 30 fps. */
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 const MAX_SIDE = COARSE_POINTER ? 1920 : 2560;
-const NEUTRAL_FX = { sharp: 0, bright: 0, contrast: 1, sat: 1, look: 0, grain: 0 };   // perbesar tanpa ubah warna
+const MAX_SIDE_HQ = COARSE_POINTER ? 2560 : 3840;
+const NEUTRAL_FX = { sharp: 0, bright: 0, contrast: 1, sat: 1, look: 0, grain: 0, clean: 0 };   // perbesar tanpa ubah warna
 const MIN_CLIP = 0.3;                        // potongan terpendek (detik)
 const FRAME_STEP = 1 / 30;                   // satu langkah tombol ±1 frame (detik)
 const AUDIO_MAX_SEC = 600;                   // batas durasi ekstrak audio (dibaca penuh ke memori)
@@ -96,7 +104,14 @@ const state = {
   vw: 0, vh: 0, dur: 0, scale: 2, unit: 'MB', locked: true, provider: 'gobox',
   busy: false, ext: 'webm', link: null,
   trimStart: 0, trimEnd: 0, rate: 2, turns: 0, flipX: 1, flipY: 1, frameFmt: 'png', channels: 2,
+  fps: 30, srcBps: 0, hasAudio: true, audioBps: 0,   // diperbarui analyzeSource() setelah video dipilih
+  cleanTouched: false, cancel: null, meta: null,
 };
+
+/** Dilempar saat pengguna menekan BATALKAN; ditangkap tombol proses tanpa menampilkan pesan eror. */
+class CanceledError extends Error {
+  constructor() { super('Dibatalkan.'); this.name = 'CanceledError'; this.canceled = true; }
+}
 
 function showStage(id) {
   STAGES.forEach(s => $(s).classList.toggle('hidden', s !== id));
@@ -119,10 +134,20 @@ function setTab(key) {
 document.querySelectorAll('.tab-btn').forEach(b =>
   b.addEventListener('click', () => { if (!state.busy) setTab(b.dataset.tab); }));
 
+/** Perkiraan sisa waktu, dihitung dari kecepatan proses sejauh ini (hanya saat mesin video sedang berjalan). */
+let etaFrom = 0;
+function etaText(frac) {
+  if (!etaFrom || frac < 0.03 || frac >= 0.995) return '';
+  const left = Math.round(((performance.now() - etaFrom) / 1000) * (1 - frac) / frac);
+  if (left < 3) return '';
+  return ' · sisa ±' + (left >= 90 ? Math.round(left / 60) + ' mnt' : left + ' dtk');
+}
+
 function setProgress(frac, title, sub, emoji) {
   $('vProgBar').style.width = Math.round(Math.min(1, Math.max(0, frac)) * 100) + '%';
   if (title) $('vProgTitle').textContent = title;
-  if (sub !== undefined) $('vProgSub').textContent = sub;
+  if (sub) $('vProgSub').textContent = sub + etaText(frac);
+  else if (sub !== undefined) $('vProgSub').textContent = sub;
   if (emoji) $('vProgEmoji').textContent = emoji;
 }
 
@@ -166,7 +191,11 @@ function loadFile(file) {
       return;
     }
     if (state.url) URL.revokeObjectURL(state.url);
-    Object.assign(state, { file, url, vw: probe.videoWidth, vh: probe.videoHeight, dur: probe.duration });
+    Object.assign(state, {
+      file, url, vw: probe.videoWidth, vh: probe.videoHeight, dur: probe.duration,
+      fps: 30, srcBps: file.size * 8 / Math.max(probe.duration, 0.1), hasAudio: true, audioBps: 0,
+      cleanTouched: false,
+    });
     $('vPreview').src = url;
     $('vFileName').textContent = file.name + ' · ' + fmtSize(file.size);
     $('vSizeHint').textContent = `ukuran saat ini: ${fmtSize(file.size)} · durasi ${fmtTime(state.dur)}`;
@@ -181,6 +210,8 @@ function loadFile(file) {
     input.value = '';
     showStage('vSettings');
     updatePreviewView();
+    suggestClean();
+    analyzeSource(file);
   };
   probe.onerror = () => {
     URL.revokeObjectURL(url);
@@ -199,12 +230,46 @@ document.querySelectorAll('#vScaleGroup .scale-opt').forEach(b => b.addEventList
   b.classList.add('active');
   state.scale = parseInt(b.dataset.v, 10);
 }));
-['vSharpen', 'vBright', 'vContrast', 'vSaturate'].forEach(id =>
+['vClean', 'vSharpen', 'vBright', 'vContrast', 'vSaturate'].forEach(id =>
   $(id).addEventListener('input', () => { $(id + 'V').textContent = $(id).value; }));
 document.querySelectorAll('.btn-rst').forEach(b => b.addEventListener('click', () => {
   $(b.dataset.t).value = b.dataset.d;
   $(b.dataset.t + 'V').textContent = b.dataset.d;
 }));
+
+$('vClean').addEventListener('input', () => { state.cleanTouched = true; });
+
+/** Takaran pembersih blok/noise kompresi (0–100) yang cocok untuk video ini, dari bitrate per piksel sumbernya. */
+function suggestClean() {
+  if (state.cleanTouched) return;
+  const bpp = state.srcBps / Math.max(1, state.vw * state.vh * state.fps);
+  const v = Math.round(Math.min(1, Math.max(0, (0.16 - bpp) / 0.12)) * 100);
+  $('vClean').value = v;
+  $('vCleanV').textContent = v;
+  $('vCleanRst').dataset.d = v;
+}
+
+/** Membaca fps asli, bitrate suara, dan ada-tidaknya suara dari file (sekali, di latar belakang). */
+async function analyzeSource(file) {
+  if (!canUseWebCodecs()) return;
+  let inp = null;
+  try {
+    const MB = await loadLib();
+    inp = new MB.Input({ source: new MB.BlobSource(file), formats: libFormats(MB) });
+    const [vt, at] = await Promise.all([inp.getPrimaryVideoTrack(), inp.getPrimaryAudioTrack()]);
+    const vs = vt ? await vt.computePacketStats(150) : null;
+    const as = at ? await at.computePacketStats(150) : null;
+    if (state.file !== file) return;                    // pengguna sudah ganti video
+    if (vs && vs.averagePacketRate >= 1) state.fps = vs.averagePacketRate;
+    state.hasAudio = !!at;
+    state.audioBps = as ? as.averageBitrate || 0 : 0;
+    suggestClean();
+  } catch (e) {
+    console.warn('Analisis video dilewati:', e);
+  } finally {
+    try { if (inp) inp.dispose(); } catch (e) { /* abaikan */ }
+  }
+}
 
 /* Kompres */
 function setUnit(unit) {
@@ -487,6 +552,40 @@ void main() {
   gl_FragColor = vec4(clamp(col, lo, hi), 1.0);
 }`;
 
+/* Pass 0 (opsional) — pembersih blok & noise kompresi pada resolusi asli, sebelum diperbesar.
+   Filter bilateral: piksel yang warnanya mirip dirata-ratakan, tepi objek yang tegas dibiarkan. Tanpa ini
+   blok kotak dari video bitrate rendah ikut membesar dan makin kasar setelah dipertajam. */
+const GL_FRAG_CLEAN = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform sampler2D u_tex;
+uniform vec2 u_px;
+uniform float u_clean;
+varying vec2 v_uv;
+
+void main() {
+  vec3 c = texture2D(u_tex, v_uv).rgb;
+  float sr = mix(0.025, 0.08, u_clean);
+  float inv = -0.5 / (sr * sr);
+  vec3 sum = c;
+  float wsum = 1.0;
+  for (int j = -2; j <= 2; j++) {
+    for (int i = -2; i <= 2; i++) {
+      if (i == 0 && j == 0) continue;
+      vec2 o = vec2(float(i), float(j));
+      vec3 s = texture2D(u_tex, v_uv + o * u_px).rgb;
+      vec3 d = s - c;
+      float w = exp(-dot(o, o) * 0.35 + dot(d, d) * inv);
+      sum += s * w;
+      wsum += w;
+    }
+  }
+  gl_FragColor = vec4(mix(c, sum / wsum, min(0.9, 0.35 + 0.6 * u_clean)), 1.0);
+}`;
+
 /* Pass 2 — ketajaman adaptif (CAS: kuat di area lembut, otomatis dikurangi di tepi kontras tinggi),
    lalu kecerahan/kontras/saturasi dengan rumus yang sama seperti HD foto, sentuhan warna
    sinematik yang halus, dan dither sangat tipis agar gradasi tidak bergaris (banding). */
@@ -556,7 +655,11 @@ function buildProgram(gl, vsSrc, fsSrc) {
 }
 
 /**
- * @returns {{draw:(video:HTMLVideoElement, n:number)=>void, dispose:()=>void}|null}
+ * @param {HTMLCanvasElement} cv  kanvas hasil (ukuran o.w × o.h)
+ * @param {number} srcW  lebar gambar sumber yang diunggah ke GPU (frame video / kanvas)
+ * @param {number} srcH  tinggi gambar sumber
+ * @param {{w:number,h:number,fx:object}} o  fx.clean > 0 menyalakan pembersih blok/noise sebelum diperbesar
+ * @returns {{draw:(source:TexImageSource, n:number)=>void, dispose:()=>void}|null}
  *          null bila WebGL tidak bisa dipakai → pemanggil memakai kanvas 2D (kanvas baru).
  */
 function createGLEngine(cv, srcW, srcH, o) {
@@ -575,13 +678,16 @@ function createGLEngine(cv, srcW, srcH, o) {
   };
   if (Math.max(srcW, srcH, o.w, o.h) > gl.getParameter(gl.MAX_TEXTURE_SIZE)) return release();
 
+  const g = o.fx;
   const up = buildProgram(gl, GL_VERT, GL_FRAG_UP);
   const fxp = buildProgram(gl, GL_VERT, GL_FRAG_FX);
-  if (!up || !fxp) return release();
+  const cln = g.clean > 0 ? buildProgram(gl, GL_VERT, GL_FRAG_CLEAN) : null;
+  if (!up || !fxp || (g.clean > 0 && !cln)) return release();
 
   const locs = (p, names) => Object.fromEntries(names.map(n => [n, gl.getUniformLocation(p, 'u_' + n)]));
   const uUp = locs(up, ['tex', 'size', 'flip']);
   const uFx = locs(fxp, ['tex', 'px', 'flip', 'sharp', 'bright', 'contrast', 'sat', 'look', 'grain', 'seed']);
+  const uCl = cln ? locs(cln, ['tex', 'px', 'flip', 'clean']) : null;
 
   const quad = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, quad);
@@ -606,6 +712,22 @@ function createGLEngine(cv, srcW, srcH, o) {
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, midTex, 0);
   if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) return release();
 
+  /* Hasil pembersihan (resolusi sumber) disimpan dengan susunan baris yang sama seperti frame sumber,
+     sehingga pass upscale membacanya persis seperti membaca srcTex. */
+  let clnTex = null, clnFbo = null;
+  if (cln) {
+    clnTex = makeTex(srcW, srcH);
+    clnFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, clnFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, clnTex, 0);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) return release();
+    gl.useProgram(cln);
+    gl.uniform1i(uCl.tex, 0);
+    gl.uniform2f(uCl.px, 1 / srcW, 1 / srcH);
+    gl.uniform1f(uCl.flip, 0);
+    gl.uniform1f(uCl.clean, Math.min(1, g.clean));
+  }
+
   gl.useProgram(up);
   gl.uniform1i(uUp.tex, 0);
   gl.uniform2f(uUp.size, srcW, srcH);
@@ -614,7 +736,6 @@ function createGLEngine(cv, srcW, srcH, o) {
   gl.uniform1i(uFx.tex, 0);
   gl.uniform2f(uFx.px, 1 / o.w, 1 / o.h);
   gl.uniform1f(uFx.flip, 0);
-  const g = o.fx;
   gl.uniform1f(uFx.sharp, g.sharp);
   gl.uniform1f(uFx.bright, g.bright);
   gl.uniform1f(uFx.contrast, g.contrast);
@@ -628,6 +749,14 @@ function createGLEngine(cv, srcW, srcH, o) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, srcTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+
+      if (cln) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, clnFbo);
+        gl.viewport(0, 0, srcW, srcH);
+        gl.useProgram(cln);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.bindTexture(gl.TEXTURE_2D, clnTex);
+      }
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.viewport(0, 0, o.w, o.h);
@@ -644,6 +773,7 @@ function createGLEngine(cv, srcW, srcH, o) {
     dispose() {
       try {
         gl.deleteTexture(srcTex); gl.deleteTexture(midTex); gl.deleteFramebuffer(fbo);
+        if (clnTex) { gl.deleteTexture(clnTex); gl.deleteFramebuffer(clnFbo); gl.deleteProgram(cln); }
         gl.deleteProgram(up); gl.deleteProgram(fxp); gl.deleteBuffer(quad);
       } catch (e) { /* abaikan */ }
       release();
@@ -719,8 +849,13 @@ function seekTo(el, t) {
  *        tf     → putar (rot: 0/90/180/270) dan balik (fx/fy: 1 atau -1), hanya di kanvas 2D
  * @param {(frac:number)=>void} onFrame
  * @returns {Promise<{blob:Blob, silent:boolean}>}
+ *
+ * MESIN CADANGAN: merekam video yang diputar real-time. Hanya dipakai bila WebCodecs tidak tersedia
+ * atau mesin utama (renderModern) gagal. Hasilnya bergantung pada kecepatan perangkat.
  */
-async function renderVideo(o, onFrame) {
+async function renderRealtime(o, onFrame) {
+  /* Perekaman real-time sudah berat bagi GPU/CPU; pembersih noise dilewati di mesin cadangan ini. */
+  if (o.fx && o.fx.clean) o = { ...o, fx: { ...o.fx, clean: 0 } };
   const makeVideo = () => {
     const el = document.createElement('video');
     el.playsInline = true;
@@ -820,7 +955,7 @@ async function renderVideo(o, onFrame) {
     const track = stream.getVideoTracks()[0];
     if (audioDest) audioDest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
 
-    const made = makeRecorder(stream, mimeCandidates(o.w, o.h), o.bps, o.audioBps || 128000);
+    const made = makeRecorder(stream, mimeCandidates(o.w, o.h), o.bps || autoBitrate(o.w, o.h), o.audioBps || 128000);
     rec = made.rec;
     mimeUsed = made.mimeType;
     rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
@@ -828,6 +963,7 @@ async function renderVideo(o, onFrame) {
     let abort;
     const aborted = new Promise((_, no) => { abort = no; });
     aborted.catch(() => {});
+    state.cancel = () => abort(new CanceledError());
     rec.onerror = () => abort(new Error('Perekaman video gagal.'));
     v.onerror = () => abort(new Error('Video berhenti dibaca oleh browser.'));
 
@@ -924,14 +1060,438 @@ async function renderVideo(o, onFrame) {
   return { blob, silent };
 }
 
+/* ═══════════════════════════════════════════════
+   MESIN UTAMA — WEBCODECS
+   Setiap frame dibaca (decode), diproses (GPU untuk HD Enhance), lalu di-encode ulang dengan
+   timestamp aslinya. Karena tidak real-time, tidak ada frame yang terbuang walaupun perangkat
+   lambat, bitrate ditentukan sendiri, dan suara disalin utuh tanpa encode ulang bila memungkinkan.
+   ═══════════════════════════════════════════════ */
+
+let libPromise = null;
+/** Memuat pustaka pemroses video (satu file lokal, tanpa CDN) saat pertama kali dibutuhkan. */
+function loadLib() {
+  if (window.Mediabunny) return Promise.resolve(window.Mediabunny);
+  if (!libPromise) {
+    libPromise = new Promise((ok, fail) => {
+      const s = document.createElement('script');
+      s.src = LIB_URL;
+      s.onload = () => (window.Mediabunny ? ok(window.Mediabunny) : fail(new Error('Pustaka video tidak lengkap.')));
+      s.onerror = () => { libPromise = null; s.remove(); fail(new Error('Pustaka video gagal dimuat.')); };
+      document.head.appendChild(s);
+    });
+  }
+  return libPromise;
+}
+function canUseWebCodecs() {
+  return typeof VideoEncoder === 'function' && typeof VideoDecoder === 'function' && typeof VideoFrame === 'function';
+}
+const libFormats = MB => [MB.MP4, MB.QTFF, MB.MATROSKA, MB.WEBM];
+
+/**
+ * Bitrate video (bit/detik).
+ * 'hd'   → hasil diperbesar: ± 0,10 bit per piksel per frame, supaya detail baru tidak hancur di encoder.
+ * 'same' → tidak diperbesar: tidak boleh lebih buruk dari sumber (min. 1,25× bitrate asli,
+ *          dikecilkan sebanding bila dimensinya diperkecil).
+ */
+function bitrateFor(w, h, fps, kind) {
+  const f = Math.min(fps, MAX_FPS);
+  const base = w * h * f * (kind === 'hd' ? 0.10 : 0.08);
+  const floor = kind === 'same' ? state.srcBps * 1.25 * Math.min(1, (w * h) / Math.max(1, state.vw * state.vh)) : 0;
+  return Math.round(Math.min(30e6, Math.max(kind === 'same' ? 1e6 : 2.5e6, base, floor)));
+}
+
+/** MP4 + H.264 diutamakan (bisa diputar di semua HP dan aplikasi); WebM hanya cadangan. */
+async function pickOutput(MB, w, h, bps, fps) {
+  const check = { width: w, height: h, quality: new MB.Quality({ bitrate: bps }), frameRate: fps };
+  if (await MB.getFirstEncodableVideoCodec(['avc'], check)) {
+    return { make: () => new MB.Mp4OutputFormat({ fastStart: 'in-memory' }), codec: 'avc', ext: 'mp4' };
+  }
+  const vp = await MB.getFirstEncodableVideoCodec(['vp9', 'vp8'], check);
+  if (vp) return { make: () => new MB.WebMOutputFormat(), codec: vp, ext: 'webm' };
+  return null;
+}
+
+/**
+ * Pengolah frame untuk satu proses. Kanvas hasil dibuat saat frame pertama datang, karena
+ * ukuran sumber yang sebenarnya baru diketahui saat itu.
+ * Jalur GPU dipakai bila memungkinkan; selain itu kanvas 2D dengan filter CSS.
+ */
+function makeFrameProcessor(o) {
+  let engine = null, cv = null, ctx = null;
+  const wantGL = !!o.fx && o.w >= 0.6 * state.vw && o.h >= 0.6 * state.vh;
+  const fresh = () => {
+    const c = document.createElement('canvas');
+    c.width = o.w; c.height = o.h;
+    return c;
+  };
+  return {
+    process(sample) {
+      if (!cv) {
+        cv = fresh();
+        if (wantGL) {
+          engine = createGLEngine(cv, sample.displayWidth, sample.displayHeight, o);
+          if (!engine) cv = fresh();                      // kanvas lama sudah terikat WebGL → pakai yang baru untuk 2D
+        }
+        if (!engine) {
+          ctx = cv.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          if (o.filter) ctx.filter = o.filter;
+        }
+      }
+      if (engine) {
+        const frame = sample.toVideoFrame();
+        try { engine.draw(frame, 0); } finally { frame.close(); }
+      } else {
+        sample.draw(ctx, 0, 0, o.w, o.h);
+      }
+      return cv;
+    },
+    dispose() { if (engine) engine.dispose(); engine = null; },
+  };
+}
+
+/* ── Ubah kecepatan ──────────────────────────────────────────────
+   Video: timestamp tiap frame dibagi kecepatan. Terlalu cepat → frame berlebih dilewati agar hasil ≤ 60 fps;
+   gerak lambat → frame ditahan di 30 fps supaya irama rata.
+   Suara: WSOLA (overlap-add dengan pencarian kemiripan gelombang) — durasi berubah, nada tetap wajar. */
+
+function makeSpeedVideoProcess(rate) {
+  const tick = 1 / 30;
+  const minGap = 1 / MAX_FPS - 0.002;
+  let lastOut = -Infinity;
+  return sample => {
+    const ts = sample.timestamp / rate, dur = sample.duration / rate;
+    if (rate >= 1) {
+      if (ts - lastOut < minGap) return null;
+      lastOut = ts;
+      const s = sample.clone();
+      s.setTimestamp(ts);
+      s.setDuration(Math.max(dur, minGap));
+      return s;
+    }
+    const n = Math.max(1, Math.round(dur / tick));
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const s = sample.clone();
+      s.setTimestamp(ts + i * tick);
+      s.setDuration(i < n - 1 ? tick : Math.max(tick / 2, dur - i * tick));
+      out.push(s);
+    }
+    return out;
+  };
+}
+
+class TempoShifter {
+  /** @param {number} rate  >1 lebih cepat, <1 lebih lambat */
+  constructor(channels, sampleRate, rate) {
+    this.nch = channels;
+    this.rate = rate;
+    this.N = 2 * Math.round(sampleRate * 0.02);          // panjang frame ± 40 ms
+    this.Hs = this.N / 2;                                // lompatan keluaran
+    this.Ha = this.Hs * rate;                            // lompatan masukan
+    this.delta = Math.round(sampleRate * 0.008);         // pencarian kemiripan ± 8 ms
+    this.win = new Float32Array(this.N);
+    for (let i = 0; i < this.N; i++) this.win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / this.N);
+    this.cap = 1 << 16;
+    this.buf = Array.from({ length: channels }, () => new Float32Array(this.cap));
+    this.mono = new Float32Array(this.cap);
+    this.start = 0;                                      // indeks mutlak sampel pertama di buf
+    this.len = 0;
+    this.acc = Array.from({ length: channels }, () => new Float32Array(this.N));
+    this.tau = 0;                                        // posisi ideal frame berikutnya (mutlak)
+    this.prevP = -1;                                     // posisi frame sebelumnya (mutlak)
+  }
+
+  /** @param {Float32Array[]} chunks satu array per saluran → array per saluran berisi sampel yang sudah jadi */
+  push(chunks) {
+    const n = chunks[0].length;
+    if (this.len + n > this.cap) {
+      const cap = Math.max(this.cap * 2, this.len + n);
+      this.buf = this.buf.map(b => { const x = new Float32Array(cap); x.set(b.subarray(0, this.len)); return x; });
+      const m = new Float32Array(cap); m.set(this.mono.subarray(0, this.len)); this.mono = m;
+      this.cap = cap;
+    }
+    for (let c = 0; c < this.nch; c++) this.buf[c].set(chunks[c], this.len);
+    for (let i = 0; i < n; i++) {
+      let s = 0;
+      for (let c = 0; c < this.nch; c++) s += chunks[c][i];
+      this.mono[this.len + i] = s / this.nch;
+    }
+    this.len += n;
+    return this._run();
+  }
+
+  /** Mengeluarkan sisa sampel dengan mengisi senyap di ujung; pemanggil memotong ke panjang yang benar. */
+  flush() {
+    const pad = Math.ceil(this.N + 2 * this.delta + 2 * this.Ha);
+    return this.push(Array.from({ length: this.nch }, () => new Float32Array(pad)));
+  }
+
+  _best(lo, hi) {
+    const { N, Hs, mono } = this;
+    const t0 = this.prevP + Hs - this.start;
+    const sad = p => {
+      const o = p - this.start;
+      let s = 0;
+      for (let n = 0; n < N; n += 4) s += Math.abs(mono[t0 + n] - mono[o + n]);
+      return s;
+    };
+    let best = lo, bs = Infinity;
+    for (let p = lo; p <= hi; p += 2) { const s = sad(p); if (s < bs) { bs = s; best = p; } }
+    for (let p = Math.max(lo, best - 1); p <= Math.min(hi, best + 1); p++) { const s = sad(p); if (s < bs) { bs = s; best = p; } }
+    return best;
+  }
+
+  _drop(keep) {
+    const k = Math.min(keep, this.start + this.len) - this.start;
+    if (k <= 0) return;
+    for (let c = 0; c < this.nch; c++) this.buf[c].copyWithin(0, k, this.len);
+    this.mono.copyWithin(0, k, this.len);
+    this.start += k;
+    this.len -= k;
+  }
+
+  _run() {
+    const { N, Hs, delta, win } = this;
+    const out = Array.from({ length: this.nch }, () => []);
+    for (;;) {
+      const first = this.prevP < 0;
+      const end = this.start + this.len;
+      const tau = Math.round(this.tau);
+      let p = 0;
+      if (first) {
+        if (end < N) break;
+      } else {
+        const lo = Math.max(this.start, tau - delta), hi = tau + delta;
+        if (hi + N > end || this.prevP + Hs + N > end) break;
+        p = this._best(lo, hi);
+      }
+      const o = p - this.start;
+      for (let c = 0; c < this.nch; c++) {
+        const a = this.acc[c], x = this.buf[c];
+        for (let n = 0; n < N; n++) a[n] += (first && n < Hs ? 1 : win[n]) * x[o + n];
+        out[c].push(a.slice(0, Hs));
+        a.copyWithin(0, Hs);
+        a.fill(0, Hs);
+      }
+      this.prevP = p;
+      this.tau += this.Ha;
+      this._drop(Math.min(Math.round(this.tau) - delta, p + Hs));
+    }
+    return out.map(parts => {
+      const all = new Float32Array(parts.reduce((s, x) => s + x.length, 0));
+      let at = 0;
+      for (const x of parts) { all.set(x, at); at += x.length; }
+      return all;
+    });
+  }
+}
+
+/** @param {number} totalSec  panjang suara masukan (setelah dipotong) — dipakai untuk mengenali potongan terakhir */
+function makeTempoProcess(MB, rate, totalSec) {
+  let shifter = null, nch = 0, sr = 0, base = 0, inFrames = 0, outFrames = 0, done = false;
+  return sample => {
+    if (done) return null;
+    if (!shifter) {
+      nch = sample.numberOfChannels; sr = sample.sampleRate;
+      shifter = new TempoShifter(nch, sr, rate);
+      base = sample.timestamp / rate;
+    }
+    const n = sample.numberOfFrames;
+    const chans = [];
+    for (let c = 0; c < nch; c++) {
+      const a = new Float32Array(n);
+      sample.copyTo(a, { planeIndex: c, format: 'f32-planar' });
+      chans.push(a);
+    }
+    inFrames += n;
+    let out = shifter.push(chans);
+    if (sample.timestamp + sample.duration >= totalSec - 0.005) {      // potongan terakhir
+      const tail = shifter.flush();
+      out = out.map((x, c) => { const y = new Float32Array(x.length + tail[c].length); y.set(x); y.set(tail[c], x.length); return y; });
+      const keep = Math.max(0, Math.round(inFrames / rate) - outFrames);
+      out = out.map(x => x.subarray(0, Math.min(x.length, keep)));
+      done = true;
+    }
+    const m = out[0].length;
+    if (!m) return null;
+    const data = new Float32Array(m * nch);
+    out.forEach((x, c) => data.set(x, c * m));
+    const s = new MB.AudioSample({
+      data, format: 'f32-planar', numberOfChannels: nch, sampleRate: sr, timestamp: base + outFrames / sr,
+    });
+    outFrames += m;
+    return [s];
+  };
+}
+
+/**
+ * Mesin utama.
+ * @param {object} o  w,h (ukuran hasil), fx/filter (HD Enhance), bps (bitrate tetap), kind ('hd'|'same'),
+ *                    start/end (potong), rate (kecepatan), tf (putar/balik), lossless (potong akhir saja → salin),
+ *                    shrink (boleh dikecilkan bila encoder menolak ukuran), maxFps, audioBps
+ * @param {{software:boolean}} opts  software → paksa encoder software (cadangan bila encoder hardware menolak)
+ */
+async function renderModern(o, onFrame, opts) {
+  const MB = await loadLib();
+  const fps = Math.min(MAX_FPS, state.fps || 30);
+  const rate = o.rate || 1;
+  const t0 = Math.max(0, o.start || 0);
+  const tEnd = o.end != null ? o.end : state.dur;
+  const bpsFor = (cw, ch) => o.bps || bitrateFor(cw, ch, o.maxFps ? Math.min(fps, o.maxFps) : fps, o.kind || 'same');
+
+  let w = o.w, h = o.h, pick = null;
+  if (o.lossless) {
+    pick = { make: () => new MB.Mp4OutputFormat({ fastStart: 'in-memory' }), codec: undefined, ext: 'mp4' };
+  } else {
+    for (let i = 0; i < (o.shrink ? 6 : 1) && !pick; i++) {
+      pick = await pickOutput(MB, w, h, bpsFor(w, h), fps);
+      if (!pick && o.shrink) { w = even(w * 0.8); h = even(h * 0.8); }
+    }
+    if (!pick) throw new Error('Encoder perangkat ini tidak mendukung ukuran video tersebut.');
+  }
+  const oo = { ...o, w, h };
+
+  const input = new MB.Input({ source: new MB.BlobSource(state.file), formats: libFormats(MB) });
+  const output = new MB.Output({ format: pick.make(), target: new MB.BufferTarget() });
+  const proc = (o.fx || o.filter) ? makeFrameProcessor(oo) : null;
+  let conv = null, canceled = false, silent = false, bps = 0;
+  state.cancel = () => { canceled = true; if (conv) conv.cancel().catch(() => {}); };
+
+  try {
+    const video = {};
+    if (!o.lossless) {
+      bps = bpsFor(w, h);
+      video.codec = pick.codec;
+      video.quality = new MB.Quality({ bitrate: bps });
+      video.hardwareAcceleration = opts.software ? 'prefer-software' : 'no-preference';
+      const capFps = o.maxFps ? Math.min(MAX_FPS, o.maxFps) : MAX_FPS;
+      if (state.fps > capFps + 1) video.frameRate = capFps;           // sumber 120 fps → 60 (atau batas kompres)
+      if (proc) {
+        video.process = s => proc.process(s);
+        video.processedWidth = w;
+        video.processedHeight = h;
+      } else {
+        video.width = w;                                              // selalu genap; encoder menolak sisi ganjil
+        video.height = h;
+        video.fit = 'fill';
+        if (rate !== 1) {
+          video.process = makeSpeedVideoProcess(rate);
+          video.processedWidth = w;
+          video.processedHeight = h;
+        }
+        if (o.tf) {
+          /* Model HidzImage: balik dulu (fx/fy), lalu putar searah jarum jam (rot). Mediabunny memutar dulu,
+             baru membalik horizontal — setara dengan: balik-X → putar -rot; balik-Y → putar (180 - rot). */
+          const { rot, fx, fy } = o.tf;
+          video.rotate = fx < 0 ? (360 - rot) % 360 : fy < 0 ? (540 - rot) % 360 : rot;
+          video.flip = fx < 0 || fy < 0;
+          video.allowTransformationMetadata = false;                 // putaran ditanam di frame, bukan metadata
+        }
+      }
+    }
+
+    const audio = {};
+    const at = await input.getPrimaryAudioTrack();
+    if (at && !o.lossless) {
+      if (o.audioBps && state.audioBps > o.audioBps * 1.25) audio.quality = new MB.Quality({ bitrate: o.audioBps });
+      if (rate !== 1) {
+        const ch = await at.getNumberOfChannels();
+        if (ch > 2) audio.numberOfChannels = 2;
+        const aEnd = Math.min(tEnd, await at.computeDuration());
+        audio.process = makeTempoProcess(MB, rate, Math.max(0.05, aEnd - t0));
+      }
+    }
+
+    /* Tanpa start, mediabunny bisa menyalin paket video/suara apa adanya (lossless); dengan start, wajib encode ulang. */
+    const trim = t0 > 0.001 ? { start: t0, end: tEnd } : tEnd < state.dur - 0.05 ? { end: tEnd } : undefined;
+    conv = await MB.Conversion.init({ input, output, video, audio, trim });
+    if (canceled) throw new CanceledError();
+    if (!conv.isValid) throw new Error('Video ini belum didukung oleh mesin utama.');
+    silent = conv.discardedTracks.some(d => d.reason !== 'discarded_by_user' && d.track.isAudioTrack());
+    conv.onProgress = p => onFrame(Math.min(1, Math.max(0, p)));
+    await conv.execute();
+  } catch (err) {
+    try { await output.cancel(); } catch (e) { /* abaikan */ }
+    if (canceled || err instanceof MB.ConversionCanceledError) throw new CanceledError();
+    throw err;
+  } finally {
+    state.cancel = null;
+    if (proc) proc.dispose();
+    try { input.dispose(); } catch (e) { /* abaikan */ }
+  }
+
+  const buf = output.target.buffer;
+  if (!buf || !buf.byteLength) throw new Error('Hasil video kosong. Coba lagi.');
+  const blob = new Blob([buf], { type: pick.ext === 'mp4' ? 'video/mp4' : 'video/webm' });
+  state.ext = pick.ext;
+  const outDur = Math.max(0.1, (tEnd - t0) / rate);
+  state.meta = {
+    mode: 'utama', lossless: !!o.lossless, w, h,
+    fps: Math.round(rate < 1 ? 30 : Math.min(MAX_FPS, fps * rate)),
+    bps: Math.round(blob.size * 8 / outDur),
+  };
+  return { blob, silent };
+}
+
+/**
+ * Pintu masuk semua proses video. Urutan: mesin utama (encoder hardware) → mesin utama (encoder software)
+ * → mesin cadangan real-time. Pembatalan oleh pengguna langsung dilempar ke pemanggil.
+ */
+async function renderVideo(o, onFrame) {
+  etaFrom = performance.now();
+  state.meta = null;
+  try {
+    if (canUseWebCodecs()) {
+      for (const software of [false, true]) {
+        try {
+          return await renderModern(o, onFrame, { software });
+        } catch (err) {
+          if (err && err.canceled) throw err;
+          console.warn(`Mesin utama gagal (${software ? 'software' : 'hardware'}), mencoba cara lain:`, err);
+          state.cancel = null;
+        }
+      }
+    }
+    etaFrom = performance.now();
+    onFrame(0);
+    const res = await renderRealtime(o, onFrame);
+    state.meta = { mode: 'cadangan' };
+    return res;
+  } finally {
+    etaFrom = 0;
+    state.cancel = null;
+  }
+}
+
 /** Rencana kompres: bitrate dari target ukuran, resolusi turun kalau bitrate terlalu kecil. */
 function planCompress(targetBytes) {
-  const audioBps = 64000;
+  const audioBps = state.hasAudio ? 64000 : 0;
   const bps = Math.floor(targetBytes * 8 * 0.9 / state.dur) - audioBps;
   if (bps < 80000) return null;
   const maxPixels = bps / (30 * 0.07);
   const k = Math.min(1, Math.sqrt(maxPixels / (state.vw * state.vh)));
-  return { w: even(state.vw * k), h: even(state.vh * k), bps, audioBps };
+  return { w: even(state.vw * k), h: even(state.vh * k), bps, audioBps, maxFps: 30 };
+}
+
+/**
+ * Encode ulang sampai ukuran file tidak melebihi target. Encoder jarang tepat sasaran pada percobaan pertama,
+ * jadi bila hasilnya kebesaran, bitrate dikoreksi sesuai selisihnya dan diulang (maksimal 2 kali lagi).
+ * @returns {Promise<{blob:Blob, silent:boolean, plan:object}|null>} null bila target terlalu kecil
+ */
+async function renderToSize(targetBytes, onFrame) {
+  let goal = targetBytes;
+  let plan = planCompress(goal);
+  if (!plan) return null;
+  for (let attempt = 0; ; attempt++) {
+    const res = await renderVideo({ ...plan, kind: 'target' }, onFrame);
+    if (!state.meta || state.meta.mode !== 'utama' || res.blob.size <= targetBytes || attempt >= 2) return { ...res, plan };
+    goal *= targetBytes / res.blob.size * 0.97;
+    const next = planCompress(goal);
+    if (!next) return { ...res, plan };
+    plan = next;
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -991,17 +1551,18 @@ const runners = {
   async enhance() {
     const s = state.scale;
     let w = state.vw * s, h = state.vh * s;
-    const k = Math.min(1, MAX_SIDE / Math.max(w, h));
+    const k = Math.min(1, (canUseWebCodecs() ? MAX_SIDE_HQ : MAX_SIDE) / Math.max(w, h));
     w = even(w * k); h = even(h * k);
 
     const sharpen = +$('vSharpen').value, br = +$('vBright').value;
     const co = +$('vContrast').value, sa = +$('vSaturate').value;
+    const clean = +$('vClean').value;
 
     /* Jalur GPU: rumus kecerahan/kontras/saturasi/ketajaman sama dengan HD foto (script.js). */
     const fx = {
       sharp: sharpen / 100, bright: (br / 60) * 80 / 255,
       contrast: 1 + (co / 60) * 0.75, sat: 1 + sa / 80,
-      look: 1, grain: 1.6 / 255,
+      look: 1, grain: 1.6 / 255, clean: clean / 100,
     };
 
     /* Cadangan bila WebGL tidak tersedia. Konvolusi SVG dihitung CPU per frame, jadi hanya dipakai pada resolusi kecil. */
@@ -1012,13 +1573,15 @@ const runners = {
       `brightness(${1 + br / 150})`, `contrast(${1 + co / 120})`, `saturate(${1 + sa / 120})`,
     ].join(' ').trim();
 
-    const { blob, silent } = await renderVideo({ w, h, fx, filter, bps: autoBitrate(w, h) }, f =>
+    const { blob, silent } = await renderVideo({ w, h, fx, filter, kind: 'hd', shrink: true }, f =>
       setProgress(f, 'MEMPERJELAS', `${fmtTime(f * state.dur)} / ${fmtTime(state.dur)}`, '✦'));
+    /* Encoder perangkat bisa menolak ukuran sebesar itu; mesin utama lalu mengecilkannya selangkah demi selangkah. */
+    const out = state.meta && state.meta.w ? state.meta : { w, h };
     return {
       blob, silent, title: 'VIDEO SELESAI DIPROSES', name: 'hidzvideo-hd',
       chips: [`<span class="chip chip-pink">${s}× UPSCALE</span>`,
               `<span class="chip chip-plain">${state.vw}×${state.vh}</span>`,
-              `<span class="chip chip-green">→ ${w}×${h}</span>`],
+              `<span class="chip chip-green">→ ${out.w}×${out.h}</span>`],
     };
   },
 
@@ -1027,11 +1590,10 @@ const runners = {
     if (!raw || raw <= 0) throw new Error('Masukkan target ukuran yang valid (angka lebih dari 0).');
     const target = state.unit === 'MB' ? raw * 1024 * 1024 : raw * 1024;
     if (target >= state.file.size) throw new Error('Target harus lebih kecil dari ukuran video saat ini (' + fmtSize(state.file.size) + ').');
-    const plan = planCompress(target);
-    if (!plan) throw new Error('Target terlalu kecil untuk durasi video ini. Naikkan targetnya.');
-
-    const { blob, silent } = await renderVideo({ ...plan }, f =>
+    const res = await renderToSize(target, f =>
       setProgress(f, 'MENGKOMPRES', `${fmtTime(f * state.dur)} / ${fmtTime(state.dur)}`, '📦'));
+    if (!res) throw new Error('Target terlalu kecil untuk durasi video ini. Naikkan targetnya.');
+    const { blob, silent, plan } = res;
     const change = '-' + Math.max(0, (1 - blob.size / state.file.size) * 100).toFixed(0) + '%';
     return {
       blob, silent, title: 'VIDEO BERHASIL DIKOMPRES', name: 'hidzvideo-compressed',
@@ -1051,7 +1613,7 @@ const runners = {
     const ow = even(w), oh = even(h);
     /* Diperbesar → upscaler GPU (tajam, tanpa mengubah warna); diperkecil → kanvas 2D biasa. */
     const enlarge = ow * oh >= state.vw * state.vh;
-    const { blob, silent } = await renderVideo({ w: ow, h: oh, fx: enlarge ? NEUTRAL_FX : null, bps: autoBitrate(ow, oh) }, f =>
+    const { blob, silent } = await renderVideo({ w: ow, h: oh, fx: enlarge ? NEUTRAL_FX : null, kind: enlarge ? 'hd' : 'same' }, f =>
       setProgress(f, 'MENGUBAH DIMENSI', `${fmtTime(f * state.dur)} / ${fmtTime(state.dur)}`, '↔️'));
     return {
       blob, silent, title: 'DIMENSI BERHASIL DIUBAH', name: `hidzvideo-${ow}x${oh}`,
@@ -1072,7 +1634,8 @@ const runners = {
     }
     if (len < MIN_CLIP) throw new Error(`Potongan terlalu pendek. Minimal ${MIN_CLIP} detik.`);
     const w = even(state.vw), h = even(state.vh);
-    const { blob, silent } = await renderVideo({ w, h, start, end, bps: autoBitrate(w, h) }, f =>
+    /* Hanya ujung yang dipotong → video dan suara disalin apa adanya (tanpa encode ulang, kualitas 100% sama). */
+    const { blob, silent } = await renderVideo({ w, h, start, end, kind: 'same', lossless: start <= 0.05 }, f =>
       setProgress(f, 'MEMOTONG', `${fmtClock(f * len)} / ${fmtClock(len)}`, '✂️'));
     return {
       blob, silent, title: 'VIDEO BERHASIL DIPOTONG', name: 'hidzvideo-potong',
@@ -1086,7 +1649,7 @@ const runners = {
   async kecepatan() {
     const rate = state.rate;
     const w = even(state.vw), h = even(state.vh);
-    const { blob, silent } = await renderVideo({ w, h, rate, bps: autoBitrate(w, h) }, f =>
+    const { blob, silent } = await renderVideo({ w, h, rate, kind: 'same' }, f =>
       setProgress(f, 'MENGUBAH KECEPATAN', `${fmtTime(f * state.dur)} / ${fmtTime(state.dur)}`, '⏱️'));
     return {
       blob, silent, title: 'KECEPATAN BERHASIL DIUBAH', name: `hidzvideo-${rate}x`,
@@ -1103,7 +1666,7 @@ const runners = {
     const sw = even(state.vw), sh = even(state.vh);
     const turned = rot % 180 !== 0;
     const w = turned ? sh : sw, h = turned ? sw : sh;
-    const { blob, silent } = await renderVideo({ w, h, tf: { rot, fx, fy }, bps: autoBitrate(w, h) }, f =>
+    const { blob, silent } = await renderVideo({ w, h, tf: { rot, fx, fy }, kind: 'same' }, f =>
       setProgress(f, 'MEMUTAR VIDEO', `${fmtTime(f * state.dur)} / ${fmtTime(state.dur)}`, '⟲'));
     return {
       blob, silent, title: 'VIDEO BERHASIL DIUBAH', name: `hidzvideo-${w}x${h}`,
@@ -1139,6 +1702,7 @@ const runners = {
   },
 
   async audio() {
+    if (!state.hasAudio) throw new Error('Video ini tidak punya suara, jadi tidak ada audio yang bisa diekstrak.');
     if (state.dur > AUDIO_MAX_SEC) {
       throw new Error(`Video terlalu panjang untuk diekstrak di browser (maksimal ${AUDIO_MAX_SEC / 60} menit).`);
     }
@@ -1179,10 +1743,10 @@ const runners = {
     }
     let payload=state.file, shrunk=false;
     if(state.provider==='gobox' && payload.size>UPLOAD_MAX_BYTES){
-      const plan=planCompress(UPLOAD_MAX_BYTES*0.85);
-      if(!plan)throw new Error('Video terlalu panjang untuk dikompres ke batas 4 MB GOBOX.');
       setProgress(0.02,'MENYIAPKAN VIDEO','mengecilkan video agar muat di GOBOX','📦');
-      const {blob}=await renderVideo({...plan},f=>setProgress(f*0.55,null,`mengecilkan ${fmtTime(f*state.dur)} / ${fmtTime(state.dur)}`));
+      const shrink=await renderToSize(UPLOAD_MAX_BYTES*0.85,f=>setProgress(f*0.55,null,`mengecilkan ${fmtTime(f*state.dur)} / ${fmtTime(state.dur)}`));
+      if(!shrink)throw new Error('Video terlalu panjang untuk dikompres ke batas 4 MB GOBOX.');
+      const {blob}=shrink;
       if(blob.size>UPLOAD_MAX_BYTES)throw new Error('Video masih lebih dari 4 MB setelah dikompres.');
       payload=new File([blob],state.file.name.replace(/\.[^.]+$/,'')+'.'+state.ext,{type:blob.type});
       shrunk=true;
@@ -1211,6 +1775,7 @@ function uploadFile(file,provider,onProgress){
       form.append('files[]',file,file.name);
       xhr.open('POST',VIDEO_UPLOAD_APIS.uguu,true);
       xhr.timeout=0;
+      state.cancel=()=>{xhr.abort();reject(new CanceledError());};
       xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(e.loaded/e.total);};
       xhr.onerror=()=>reject(new Error('UGUU tidak dapat dihubungi dari browser.'));
       xhr.ontimeout=()=>reject(new Error('Upload UGUU terlalu lama.'));
@@ -1230,6 +1795,7 @@ function uploadFile(file,provider,onProgress){
     xhr.setRequestHeader('X-File-Name',encodeURIComponent(file.name));
     xhr.setRequestHeader('X-File-Type',file.type);
     xhr.setRequestHeader('X-Provider','gobox');
+    state.cancel=()=>{xhr.abort();reject(new CanceledError());};
     xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress(e.loaded/e.total);};
     xhr.onerror=()=>reject(new Error('Tidak bisa terhubung ke GOBOX.'));
     xhr.ontimeout=()=>reject(new Error('Upload GOBOX terlalu lama.'));
@@ -1258,7 +1824,10 @@ $('vProcessBtn').addEventListener('click', async () => {
   if (!state.file || state.busy) return;
   const tab = state.tab;
   state.busy = true;
+  state.meta = null;
   setProgress(0, 'MEMPROSES', 'jangan tutup atau pindah tab browser', '⚙️');
+  $('vCancelBtn').disabled = false;
+  $('vCancelBtn').classList.toggle('hidden', tab === 'audio' || tab === 'frame');   // dua proses ini sangat singkat
   showStage('vProgress');
   try {
     const res = await runners[tab]();
@@ -1266,11 +1835,18 @@ $('vProcessBtn').addEventListener('click', async () => {
     await sleep(200);
     showResult(tab, res);
   } catch (err) {
-    showAlert(err.message || 'Terjadi kesalahan. Coba lagi.', GAGAL[tab]);
+    if (!(err && err.canceled)) showAlert((err && err.message) || 'Terjadi kesalahan. Coba lagi.', GAGAL[tab]);
     showStage('vSettings');
   } finally {
     state.busy = false;
+    state.cancel = null;
   }
+});
+
+$('vCancelBtn').addEventListener('click', () => {
+  if (!state.busy || !state.cancel) return;
+  $('vCancelBtn').disabled = true;
+  state.cancel();
 });
 
 /** Hentikan dan kosongkan pemutar hasil (video/audio) supaya tidak terus berbunyi atau menahan memori. */
@@ -1284,6 +1860,17 @@ function showResult(tab, res) {
   const isLink = kind === 'link';
   $('vResultTitle').textContent = res.title;
   const chips = res.chips.slice();
+  const m = state.meta;
+  state.meta = null;
+  if (kind === 'video' && m) {
+    if (m.mode === 'utama') {
+      chips.push(m.lossless
+        ? '<span class="chip chip-cyan">TANPA ENCODE ULANG</span>'
+        : `<span class="chip chip-plain">${m.fps} FPS</span><span class="chip chip-plain">${m.bps >= 1e6 ? (m.bps / 1e6).toFixed(1) + ' Mbps' : Math.round(m.bps / 1e3) + ' kbps'}</span>`);
+    } else {
+      chips.push('<span class="chip chip-plain">MODE KOMPATIBILITAS</span>');
+    }
+  }
   if (res.silent) chips.push('<span class="chip chip-plain">TANPA SUARA</span>');
   $('vResultChips').innerHTML = chips.join('');
 
