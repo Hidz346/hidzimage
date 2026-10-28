@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
   <title>HidzImage — Video Tools</title>
   <link rel="icon" href="https://www.gobox.my.id/file/IcHjU.png"/>
-  <link rel="stylesheet" href="style.css?v=20261027-0600"/>
+  <link rel="stylesheet" href="style.css?v=20261028-0600"/>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 </head>
 <body>
@@ -34,7 +34,7 @@
 <main>
 <div class="page">
 
-  <div class="tab-bar tab-bar-grid">
+  <div class="tab-bar tab-bar-grid has-wide">
     <button class="tab-btn active" data-tab="enhance">✦ HD<br>ENHANCE</button>
     <button class="tab-btn" data-tab="kompres">⚡ KOMPRES<br>UKURAN</button>
     <button class="tab-btn" data-tab="dimensi">↔ UBAH<br>DIMENSI</button>
@@ -44,6 +44,7 @@
     <button class="tab-btn" data-tab="frame">🖼 AMBIL<br>FRAME</button>
     <button class="tab-btn" data-tab="audio">🎵 EKSTRAK<br>AUDIO</button>
     <button class="tab-btn" data-tab="upload">☁ UPLOAD<br>KE LINK</button>
+    <button class="tab-btn tab-wide" data-tab="ekspor">📤 STUDIO EKSPOR <small>MP4 · GIF · GAMBAR · FPS · RESOLUSI</small></button>
   </div>
 
   <!-- Pilih video -->
@@ -78,6 +79,8 @@
           <button class="scale-opt active" data-v="2">2× HD</button>
           <button class="scale-opt" data-v="4">4× ULTRA</button>
         </div>
+        <div class="group-label">frame rate hasil</div>
+        <div class="pick-grid" data-fps-row="enhance"></div>
         <div class="group-label">ketajaman &amp; warna</div>
         <div class="slider-row"><span class="slider-lbl">BERSIH <span id="vCleanV">0</span></span>
           <input type="range" id="vClean" min="0" max="100" value="0"/><button class="btn-rst" id="vCleanRst" data-t="vClean" data-d="0">↺</button></div>
@@ -116,6 +119,8 @@
             <input type="number" class="dim-input" id="vHeight" min="2" max="4096" inputmode="numeric"/></div>
         </div>
         <p class="process-note" id="vRatioNote">🔒 rasio aspek terkunci</p>
+        <div class="group-label">frame rate hasil</div>
+        <div class="pick-grid" data-fps-row="dimensi"></div>
       </div>
 
       <!-- Potong -->
@@ -194,6 +199,89 @@
         <p class="process-note" id="vAudioNote">WAV tanpa kompresi</p>
       </div>
 
+      <!-- Studio Ekspor -->
+      <div id="pEkspor" class="hidden">
+        <div class="sec-label">Studio Ekspor</div>
+        <div class="xs-ticket" aria-live="polite">
+          <div class="xs-ticket-top">
+            <span class="xs-tag" id="xTag">MP4</span>
+            <span class="xs-main" id="xMain">—</span>
+          </div>
+          <div class="xs-stats">
+            <div><span class="xs-k">DURASI</span><span class="xs-v" id="xDur">—</span></div>
+            <div><span class="xs-k">FRAME</span><span class="xs-v" id="xFrames">—</span></div>
+            <div><span class="xs-k">UKURAN</span><span class="xs-v" id="xSize">—</span></div>
+          </div>
+          <ul class="xs-notes" id="xNotes"></ul>
+        </div>
+
+        <div class="group-label">format</div>
+        <div class="fmt-grid" id="xFormat">
+          <button class="fmt-card active" data-f="mp4"><span class="fmt-ico">🎞</span><span class="fmt-name">MP4</span><span class="fmt-desc">H.264 · paling kompatibel</span></button>
+          <button class="fmt-card" data-f="webm"><span class="fmt-ico">🌐</span><span class="fmt-name">WEBM</span><span class="fmt-desc">VP9 · ringan untuk web</span></button>
+          <button class="fmt-card" data-f="gif"><span class="fmt-ico">✨</span><span class="fmt-name">GIF</span><span class="fmt-desc">animasi loop · tanpa suara</span></button>
+          <button class="fmt-card" data-f="zip"><span class="fmt-ico">🗂</span><span class="fmt-name">GAMBAR</span><span class="fmt-desc">urutan PNG/JPG dalam ZIP</span></button>
+        </div>
+
+        <div class="group-label">resolusi · sisi pendek</div>
+        <div class="pick-grid" id="xRes"></div>
+        <div class="xs-custom hidden" id="xCustom">
+          <div class="dim-row">
+            <div class="dim-field"><label>LEBAR (px)</label>
+              <input type="number" class="dim-input" id="xW" min="2" max="4096" inputmode="numeric"/></div>
+            <span class="dim-x">×</span>
+            <div class="dim-field"><label>TINGGI (px)</label>
+              <input type="number" class="dim-input" id="xH" min="2" max="4096" inputmode="numeric"/></div>
+          </div>
+          <div class="group-label">jika rasio berbeda</div>
+          <div class="scale-group" id="xFit">
+            <button class="scale-opt active" data-v="cover">ISI PENUH</button>
+            <button class="scale-opt" data-v="contain">MUAT</button>
+            <button class="scale-opt" data-v="fill">TARIK</button>
+          </div>
+        </div>
+
+        <div class="group-label">frame rate (fps)</div>
+        <div class="pick-grid" id="xFps"></div>
+        <div class="xs-custom hidden" id="xFpsCustom">
+          <div class="dim-field"><label>FPS (1–60)</label>
+            <input type="number" class="dim-input" id="xFpsVal" min="1" max="60" step="1" value="30" inputmode="numeric"/></div>
+        </div>
+
+        <div id="xQualityWrap">
+          <div class="group-label" id="xQualityLabel">kualitas</div>
+          <div class="scale-group" id="xQuality">
+            <button class="scale-opt" data-v="hemat">HEMAT</button>
+            <button class="scale-opt active" data-v="seimbang">SEIMBANG</button>
+            <button class="scale-opt" data-v="tinggi">TINGGI</button>
+            <button class="scale-opt" data-v="maksimal">MAKS</button>
+          </div>
+        </div>
+        <div id="xDitherWrap" class="hidden">
+          <div class="group-label">dither warna GIF</div>
+          <div class="scale-group" id="xDither">
+            <button class="scale-opt" data-v="tanpa">TANPA</button>
+            <button class="scale-opt active" data-v="seimbang">SEIMBANG</button>
+            <button class="scale-opt" data-v="halus">HALUS</button>
+          </div>
+        </div>
+        <div id="xAudioWrap">
+          <div class="group-label">suara</div>
+          <div class="scale-group" id="xAudio">
+            <button class="scale-opt active" data-v="on">IKUT</button>
+            <button class="scale-opt" data-v="off">BISU</button>
+          </div>
+        </div>
+        <div id="xImgWrap" class="hidden">
+          <div class="group-label">format gambar</div>
+          <div class="scale-group" id="xImgFmt">
+            <button class="scale-opt active" data-v="png">PNG</button>
+            <button class="scale-opt" data-v="jpg">JPG</button>
+          </div>
+        </div>
+        <p class="process-note" id="xHint">pilih pengaturan, hasil akan persis seperti ringkasan di atas</p>
+      </div>
+
       <!-- Upload ke link -->
       <div id="pUpload" class="hidden">
         <div class="sec-label">Layanan Upload</div>
@@ -256,6 +344,7 @@
         <button class="btn btn-green btn-block" id="vDownloadBtn">⬇ DOWNLOAD</button>
         <button class="btn btn-green btn-block hidden" id="vCopyBtn">📋 SALIN LINK</button>
         <button class="btn btn-cyan btn-block hidden" id="vOpenBtn">↗ BUKA LINK</button>
+        <button class="btn btn-cyan btn-block hidden" id="vChainBtn">↻ LANJUT EDIT HASIL INI</button>
         <button class="btn btn-cyan btn-block" id="vEditAgainBtn">✏ EDIT LAGI</button>
         <button class="btn btn-yellow btn-block" id="vNewBtn">🎬 VIDEO BARU</button>
       </div>
@@ -290,6 +379,8 @@
   b.addEventListener('click',function(){a(!document.body.classList.contains('dark'));});
 })();
 </script>
-<script src="video.js?v=20261027-0600"></script>
+<script src="kit.js?v=20261028-0600"></script>
+<script src="video.js?v=20261028-0600"></script>
+<script src="video-ekspor.js?v=20261028-0600"></script>
 </body>
 </html>

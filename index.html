@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
   <title>HidzImage — HD Enhancer</title>
   <link rel="icon" href="https://www.gobox.my.id/file/IcHjU.png"/>
-  <link rel="stylesheet" href="style.css?v=20261027-0600"/>
+  <link rel="stylesheet" href="style.css?v=20261028-0600"/>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 </head>
 <body>
@@ -38,12 +38,13 @@
 <div class="page">
 
   <!-- ── TAB BAR ──────────────────────────── -->
-  <div class="tab-bar tab-bar-5">
+  <div class="tab-bar tab-bar-grid">
     <button class="tab-btn active" data-tab="enhance">✦ HD<br>ENHANCE</button>
     <button class="tab-btn" data-tab="kompres">⚡ KOMPRES<br>UKURAN</button>
     <button class="tab-btn" data-tab="dimensi">↔ UBAH<br>DIMENSI</button>
     <button class="tab-btn" data-tab="putar">⟲ PUTAR<br>&amp; BALIK</button>
     <button class="tab-btn" data-tab="upload">☁ UPLOAD<br>KE LINK</button>
+    <button class="tab-btn" data-tab="animasi">🎞 ANIMASI<br>GIF &amp; FPS</button>
   </div>
 
   <!-- ══════════════════════════════════════
@@ -517,6 +518,157 @@
 
   </div><!-- /tabPutar -->
 
+  <!-- ══════════════════════════════════════
+       TAB 6 — ANIMASI (foto → GIF / video, FPS & resolusi pilihan)
+       ══════════════════════════════════════ -->
+  <div id="tabAnimasi" class="hidden">
+
+    <!-- A-S0: Upload -->
+    <section id="aUpload">
+      <div class="upload-zone" id="aUploadZone">
+        <div class="upload-emoji">🎞️</div>
+        <h2>FOTO JADI GIF &amp; VIDEO</h2>
+        <p>Susun satu atau banyak foto jadi animasi — FPS dan resolusi bebas dipilih</p>
+        <p class="upload-hint">JPG · PNG · WEBP · sampai 60 foto</p>
+        <button class="btn-pick" id="aUploadBtn">↑ PILIH FOTO</button>
+      </div>
+      <input type="file" id="aFileInput" accept="image/*" multiple hidden/>
+    </section>
+
+    <!-- A-S1: Settings -->
+    <section id="aSettings" class="hidden">
+      <div class="card">
+        <div class="file-info-bar">
+          <span class="fname" id="aCount">—</span>
+          <button class="btn-change" id="aAddBtn">+ TAMBAH</button>
+        </div>
+        <div class="anim-grid" id="aGrid"></div>
+        <div class="controls-card">
+          <div class="sec-label">Studio Animasi</div>
+          <div class="xs-ticket" aria-live="polite">
+            <div class="xs-ticket-top">
+              <span class="xs-tag" id="aTag">MP4</span>
+              <span class="xs-main" id="aMain">—</span>
+            </div>
+            <div class="xs-stats">
+              <div><span class="xs-k">DURASI</span><span class="xs-v" id="aDur">—</span></div>
+              <div><span class="xs-k">FRAME</span><span class="xs-v" id="aFrames">—</span></div>
+              <div><span class="xs-k">UKURAN</span><span class="xs-v" id="aSize">—</span></div>
+            </div>
+            <ul class="xs-notes" id="aNotes"></ul>
+          </div>
+
+          <div class="group-label">format</div>
+          <div class="fmt-grid" id="aFormat">
+            <button class="fmt-card active" data-f="mp4"><span class="fmt-ico">🎞</span><span class="fmt-name">MP4</span><span class="fmt-desc">H.264 · paling kompatibel</span></button>
+            <button class="fmt-card" data-f="webm"><span class="fmt-ico">🌐</span><span class="fmt-name">WEBM</span><span class="fmt-desc">VP9 · ringan untuk web</span></button>
+            <button class="fmt-card" data-f="gif"><span class="fmt-ico">✨</span><span class="fmt-name">GIF</span><span class="fmt-desc">animasi loop · bisa di mana saja</span></button>
+            <button class="fmt-card" data-f="zip"><span class="fmt-ico">🗂</span><span class="fmt-name">GAMBAR</span><span class="fmt-desc">urutan PNG/JPG dalam ZIP</span></button>
+          </div>
+
+          <div class="group-label">durasi tiap foto</div>
+          <div class="pick-grid" id="aHold"></div>
+
+          <div class="group-label">transisi antar foto</div>
+          <div class="scale-group" id="aTrans">
+            <button class="scale-opt" data-v="cut">POTONG</button>
+            <button class="scale-opt active" data-v="fade">MEMUDAR</button>
+            <button class="scale-opt" data-v="slide">GESER</button>
+          </div>
+
+          <div class="group-label">gerakan foto</div>
+          <div class="scale-group" id="aMotion">
+            <button class="scale-opt active" data-v="none">DIAM</button>
+            <button class="scale-opt" data-v="in">ZOOM IN</button>
+            <button class="scale-opt" data-v="out">ZOOM OUT</button>
+          </div>
+
+          <div class="group-label">rasio layar</div>
+          <div class="pick-grid" id="aRatio"></div>
+
+          <div class="group-label">resolusi · sisi pendek</div>
+          <div class="pick-grid" id="aRes"></div>
+
+          <div class="group-label">bingkai foto</div>
+          <div class="scale-group" id="aFit">
+            <button class="scale-opt active" data-v="cover">ISI PENUH</button>
+            <button class="scale-opt" data-v="black">MUAT · HITAM</button>
+            <button class="scale-opt" data-v="white">MUAT · PUTIH</button>
+          </div>
+
+          <div class="group-label">frame rate (fps)</div>
+          <div class="pick-grid" id="aFps"></div>
+          <div class="xs-custom hidden" id="aFpsCustom">
+            <div class="dim-field"><label>FPS (1–60)</label>
+              <input type="number" class="dim-input" id="aFpsVal" min="1" max="60" step="1" value="30" inputmode="numeric"/></div>
+          </div>
+
+          <div id="aQualityWrap">
+            <div class="group-label">kualitas</div>
+            <div class="scale-group" id="aQuality">
+              <button class="scale-opt" data-v="hemat">HEMAT</button>
+              <button class="scale-opt active" data-v="seimbang">SEIMBANG</button>
+              <button class="scale-opt" data-v="tinggi">TINGGI</button>
+              <button class="scale-opt" data-v="maksimal">MAKS</button>
+            </div>
+          </div>
+          <div id="aDitherWrap" class="hidden">
+            <div class="group-label">dither warna GIF</div>
+            <div class="scale-group" id="aDither">
+              <button class="scale-opt" data-v="tanpa">TANPA</button>
+              <button class="scale-opt active" data-v="seimbang">SEIMBANG</button>
+              <button class="scale-opt" data-v="halus">HALUS</button>
+            </div>
+          </div>
+          <div id="aImgWrap" class="hidden">
+            <div class="group-label">format gambar</div>
+            <div class="scale-group" id="aImgFmt">
+              <button class="scale-opt active" data-v="png">PNG</button>
+              <button class="scale-opt" data-v="jpg">JPG</button>
+            </div>
+          </div>
+
+          <div class="process-wrap" style="margin-top:18px">
+            <button class="btn btn-pink btn-block" id="aProcessBtn">🎞 BUAT ANIMASI SEKARANG</button>
+            <p class="process-note">semua berjalan di browser · foto tidak diunggah ke mana pun</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- A-S2: Progress -->
+    <section id="aProgress" class="hidden">
+      <div class="card progress-card">
+        <div class="prog-emoji" id="aProgEmoji">🎞️</div>
+        <div class="prog-title" id="aProgTitle">MEMBUAT ANIMASI</div>
+        <div class="prog-sub"  id="aProgSub">jangan tutup atau pindah tab browser</div>
+        <div class="prog-bar-wrap"><div class="prog-bar" id="aProgBar"></div></div>
+        <button class="btn btn-yellow prog-cancel" id="aCancelBtn">✕ BATALKAN</button>
+      </div>
+    </section>
+
+    <!-- A-S3: Result -->
+    <section id="aResult" class="hidden">
+      <div class="card result-card">
+        <div class="result-head">
+          <h2 id="aResultTitle">ANIMASI BERHASIL DIBUAT</h2>
+          <span class="badge-done">✓ DONE</span>
+        </div>
+        <div class="cmp-wrap vid-out" id="aOutWrap">
+          <video id="aOutVideo" class="vid hidden" controls playsinline loop></video>
+          <img id="aOutImg" class="vid hidden" alt="Hasil animasi"/>
+        </div>
+        <div class="result-chips" id="aResultChips"></div>
+        <div class="result-actions">
+          <button class="btn btn-green  btn-block" id="aDownloadBtn">⬇ DOWNLOAD</button>
+          <button class="btn btn-cyan   btn-block" id="aEditAgainBtn">✏ UBAH LAGI</button>
+          <button class="btn btn-yellow btn-block" id="aNewBtn">📷 ANIMASI BARU</button>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /tabAnimasi -->
+
 </div><!-- /page -->
 </main>
 
@@ -539,6 +691,8 @@
   b.addEventListener('click',function(){a(!document.body.classList.contains('dark'));});
 })();
 </script>
-<script src="script.js?v=20261027-0600"></script>
+<script src="kit.js?v=20261028-0600"></script>
+<script src="script.js?v=20261028-0600"></script>
+<script src="foto-animasi.js?v=20261028-0600"></script>
 </body>
 </html>

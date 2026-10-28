@@ -86,7 +86,7 @@ const UPLOAD_ENDPOINT = '/api/upload';
 const UPLOAD_MAX_BYTES = 4 * 1024 * 1024; // batas jalur Gobox via HidzImage
 const FPS = 30;                             // mesin cadangan: frame rate hasil (sumber 60 fps diambil selang-seling)
 const MAX_FPS = 60;                         // mesin utama: batas frame rate hasil (sumber 120 fps diambil selang-seling)
-const LIB_URL = 'vendor/mediabunny.min.js?v=1.62.1';
+const LIB_URL = 'vendor/mediabunny.min.js?v=1.62.1-b';
 /* Sisi terpanjang hasil enhance. Mesin utama tidak real-time sehingga HP pun sanggup sampai 2560
    (otomatis turun bila encoder perangkat menolak); mesin cadangan merekam real-time, jadi di layar
    sentuh dibatasi Full HD agar encoder sanggup mengejar 30 fps. */
@@ -106,6 +106,7 @@ const state = {
   trimStart: 0, trimEnd: 0, rate: 2, turns: 0, flipX: 1, flipY: 1, frameFmt: 'png', channels: 2,
   fps: 30, srcBps: 0, hasAudio: true, audioBps: 0,   // diperbarui analyzeSource() setelah video dipilih
   cleanTouched: false, cancel: null, meta: null,
+  outFps: { enhance: 0, dimensi: 0 },        // FPS hasil pilihan per tab (0 = ikut sumber)
 };
 
 /** Dilempar saat pengguna menekan BATALKAN; ditangkap tombol proses tanpa menampilkan pesan eror. */
@@ -212,6 +213,7 @@ function loadFile(file) {
     updatePreviewView();
     suggestClean();
     analyzeSource(file);
+    document.dispatchEvent(new Event('hidz:source'));
   };
   probe.onerror = () => {
     URL.revokeObjectURL(url);
@@ -264,6 +266,7 @@ async function analyzeSource(file) {
     state.hasAudio = !!at;
     state.audioBps = as ? as.averageBitrate || 0 : 0;
     suggestClean();
+    document.dispatchEvent(new Event('hidz:source'));
   } catch (e) {
     console.warn('Analisis video dilewati:', e);
   } finally {
@@ -1100,12 +1103,16 @@ function bitrateFor(w, h, fps, kind) {
   return Math.round(Math.min(30e6, Math.max(kind === 'same' ? 1e6 : 2.5e6, base, floor)));
 }
 
-/** MP4 + H.264 diutamakan (bisa diputar di semua HP dan aplikasi); WebM hanya cadangan. */
-async function pickOutput(MB, w, h, bps, fps) {
+/**
+ * MP4 + H.264 diutamakan (bisa diputar di semua HP dan aplikasi); WebM hanya cadangan.
+ * `container` ('mp4' | 'webm') memaksa satu format (dipakai Studio Ekspor); tanpa itu, format dipilih otomatis.
+ */
+async function pickOutput(MB, w, h, bps, fps, container) {
   const check = { width: w, height: h, quality: new MB.Quality({ bitrate: bps }), frameRate: fps };
-  if (await MB.getFirstEncodableVideoCodec(['avc'], check)) {
+  if (container !== 'webm' && await MB.getFirstEncodableVideoCodec(['avc'], check)) {
     return { make: () => new MB.Mp4OutputFormat({ fastStart: 'in-memory' }), codec: 'avc', ext: 'mp4' };
   }
+  if (container === 'mp4') return null;
   const vp = await MB.getFirstEncodableVideoCodec(['vp9', 'vp8'], check);
   if (vp) return { make: () => new MB.WebMOutputFormat(), codec: vp, ext: 'webm' };
   return null;
@@ -1335,7 +1342,7 @@ function makeTempoProcess(MB, rate, totalSec) {
  */
 async function renderModern(o, onFrame, opts) {
   const MB = await loadLib();
-  const fps = Math.min(MAX_FPS, state.fps || 30);
+  const fps = Math.min(MAX_FPS, o.outFps || state.fps || 30);      // outFps: FPS hasil pilihan pengguna
   const rate = o.rate || 1;
   const t0 = Math.max(0, o.start || 0);
   const tEnd = o.end != null ? o.end : state.dur;
@@ -1346,7 +1353,7 @@ async function renderModern(o, onFrame, opts) {
     pick = { make: () => new MB.Mp4OutputFormat({ fastStart: 'in-memory' }), codec: undefined, ext: 'mp4' };
   } else {
     for (let i = 0; i < (o.shrink ? 6 : 1) && !pick; i++) {
-      pick = await pickOutput(MB, w, h, bpsFor(w, h), fps);
+      pick = await pickOutput(MB, w, h, bpsFor(w, h), fps, o.container);
       if (!pick && o.shrink) { w = even(w * 0.8); h = even(h * 0.8); }
     }
     if (!pick) throw new Error('Encoder perangkat ini tidak mendukung ukuran video tersebut.');
@@ -1367,7 +1374,8 @@ async function renderModern(o, onFrame, opts) {
       video.quality = new MB.Quality({ bitrate: bps });
       video.hardwareAcceleration = opts.software ? 'prefer-software' : 'no-preference';
       const capFps = o.maxFps ? Math.min(MAX_FPS, o.maxFps) : MAX_FPS;
-      if (state.fps > capFps + 1) video.frameRate = capFps;           // sumber 120 fps → 60 (atau batas kompres)
+      if (o.outFps) video.frameRate = fps;                            // FPS pilihan: frame dilewati/diulang di grid waktu yang rata
+      else if (state.fps > capFps + 1) video.frameRate = capFps;      // sumber 120 fps → 60 (atau batas kompres)
       if (proc) {
         video.process = s => proc.process(s);
         video.processedWidth = w;
@@ -1375,7 +1383,7 @@ async function renderModern(o, onFrame, opts) {
       } else {
         video.width = w;                                              // selalu genap; encoder menolak sisi ganjil
         video.height = h;
-        video.fit = 'fill';
+        video.fit = o.fit || 'fill';
         if (rate !== 1) {
           video.process = makeSpeedVideoProcess(rate);
           video.processedWidth = w;
@@ -1394,7 +1402,8 @@ async function renderModern(o, onFrame, opts) {
 
     const audio = {};
     const at = await input.getPrimaryAudioTrack();
-    if (at && !o.lossless) {
+    if (at && o.mute) audio.discard = true;
+    if (at && !o.lossless && !o.mute) {
       if (o.audioBps && state.audioBps > o.audioBps * 1.25) audio.quality = new MB.Quality({ bitrate: o.audioBps });
       if (rate !== 1) {
         const ch = await at.getNumberOfChannels();
@@ -1429,7 +1438,7 @@ async function renderModern(o, onFrame, opts) {
   const outDur = Math.max(0.1, (tEnd - t0) / rate);
   state.meta = {
     mode: 'utama', lossless: !!o.lossless, w, h,
-    fps: Math.round(rate < 1 ? 30 : Math.min(MAX_FPS, fps * rate)),
+    fps: o.outFps ? Math.round(fps * 100) / 100 : Math.round(rate < 1 ? 30 : Math.min(MAX_FPS, fps * rate)),
     bps: Math.round(blob.size * 8 / outDur),
   };
   return { blob, silent };
@@ -1443,16 +1452,24 @@ async function renderVideo(o, onFrame) {
   etaFrom = performance.now();
   state.meta = null;
   try {
+    let failure = null;
     if (canUseWebCodecs()) {
       for (const software of [false, true]) {
         try {
           return await renderModern(o, onFrame, { software });
         } catch (err) {
           if (err && err.canceled) throw err;
+          failure = err;
           console.warn(`Mesin utama gagal (${software ? 'software' : 'hardware'}), mencoba cara lain:`, err);
           state.cancel = null;
         }
       }
+    }
+    /* Studio Ekspor (o.exact) menuntut format/FPS/dimensi persis sesuai pilihan; mesin cadangan tidak bisa menjaminnya. */
+    if (o.exact) {
+      throw new Error(canUseWebCodecs()
+        ? 'Perangkat ini tidak bisa membuat video dengan pengaturan tersebut. Coba resolusi atau FPS lebih kecil, atau format lain.' + (failure && failure.message ? ' (' + failure.message + ')' : '')
+        : 'Browser ini belum mendukung WebCodecs. Gunakan Chrome, Edge, atau Safari terbaru.');
     }
     etaFrom = performance.now();
     onFrame(0);
@@ -1573,7 +1590,7 @@ const runners = {
       `brightness(${1 + br / 150})`, `contrast(${1 + co / 120})`, `saturate(${1 + sa / 120})`,
     ].join(' ').trim();
 
-    const { blob, silent } = await renderVideo({ w, h, fx, filter, kind: 'hd', shrink: true }, f =>
+    const { blob, silent } = await renderVideo({ w, h, fx, filter, kind: 'hd', shrink: true, outFps: state.outFps.enhance || undefined }, f =>
       setProgress(f, 'MEMPERJELAS', `${fmtTime(f * state.dur)} / ${fmtTime(state.dur)}`, '✦'));
     /* Encoder perangkat bisa menolak ukuran sebesar itu; mesin utama lalu mengecilkannya selangkah demi selangkah. */
     const out = state.meta && state.meta.w ? state.meta : { w, h };
@@ -1613,7 +1630,7 @@ const runners = {
     const ow = even(w), oh = even(h);
     /* Diperbesar → upscaler GPU (tajam, tanpa mengubah warna); diperkecil → kanvas 2D biasa. */
     const enlarge = ow * oh >= state.vw * state.vh;
-    const { blob, silent } = await renderVideo({ w: ow, h: oh, fx: enlarge ? NEUTRAL_FX : null, kind: enlarge ? 'hd' : 'same' }, f =>
+    const { blob, silent } = await renderVideo({ w: ow, h: oh, fx: enlarge ? NEUTRAL_FX : null, kind: enlarge ? 'hd' : 'same', outFps: state.outFps.dimensi || undefined }, f =>
       setProgress(f, 'MENGUBAH DIMENSI', `${fmtTime(f * state.dur)} / ${fmtTime(state.dur)}`, '↔️'));
     return {
       blob, silent, title: 'DIMENSI BERHASIL DIUBAH', name: `hidzvideo-${ow}x${oh}`,
@@ -1874,7 +1891,9 @@ function showResult(tab, res) {
   if (res.silent) chips.push('<span class="chip chip-plain">TANPA SUARA</span>');
   $('vResultChips').innerHTML = chips.join('');
 
-  ['vOutWrap', 'vDownloadBtn'].forEach(id => $(id).classList.toggle('hidden', isLink));
+  $('vOutWrap').classList.toggle('hidden', isLink || kind === 'file');
+  $('vDownloadBtn').classList.toggle('hidden', isLink);
+  $('vChainBtn').classList.toggle('hidden', kind !== 'video');
   ['vLinkBox', 'vCopyBtn', 'vOpenBtn'].forEach(id => $(id).classList.toggle('hidden', !isLink));
 
   if (state.outUrl) { URL.revokeObjectURL(state.outUrl); state.outUrl = null; }
@@ -1887,7 +1906,8 @@ function showResult(tab, res) {
     $('vOut').classList.toggle('hidden', kind !== 'video');
     $('vFrameOut').classList.toggle('hidden', kind !== 'image');
     $('vAudioOut').classList.toggle('hidden', kind !== 'audio');
-    $({ video: 'vOut', image: 'vFrameOut', audio: 'vAudioOut' }[kind]).src = state.outUrl;
+    const shown = { video: 'vOut', image: 'vFrameOut', audio: 'vAudioOut' }[kind];
+    if (shown) $(shown).src = state.outUrl;
   }
   showStage('vResult');
 }
@@ -1908,6 +1928,15 @@ $('vCopyBtn').addEventListener('click', async () => {
   }
 });
 $('vOpenBtn').addEventListener('click', () => { if (state.link) window.open(state.link, '_blank', 'noopener'); });
+/** Jadikan hasil video sebagai sumber baru, supaya bisa diproses lagi (mis. HD dulu, lalu ekspor GIF 24 fps). */
+$('vChainBtn').addEventListener('click', () => {
+  if (!state.outUrl || state.busy) return;
+  fetch(state.outUrl).then(r => r.blob()).then(blob => {
+    const name = state.outName || 'hidzvideo.mp4';
+    clearOutputs();
+    loadFile(new File([blob], name, { type: blob.type || 'video/mp4' }));
+  }).catch(() => showAlert('Hasil tidak bisa dimuat ulang. Download dulu, lalu pilih lagi sebagai video baru.'));
+});
 $('vEditAgainBtn').addEventListener('click', () => { clearOutputs(); showStage('vSettings'); updatePreviewView(); });
 $('vNewBtn').addEventListener('click', () => {
   clearOutputs();
