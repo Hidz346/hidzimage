@@ -1433,6 +1433,7 @@ async function renderModern(o, onFrame, opts) {
 
   const buf = output.target.buffer;
   if (!buf || !buf.byteLength) throw new Error('Hasil video kosong. Coba lagi.');
+  if (pick.ext === 'mp4') HidzKit.fixMp4Timescale(buf);
   const blob = new Blob([buf], { type: pick.ext === 'mp4' ? 'video/mp4' : 'video/webm' });
   state.ext = pick.ext;
   const outDur = Math.max(0.1, (tEnd - t0) / rate);

@@ -5,6 +5,7 @@
  *  - GifWriter : encoder GIF89a (palet global median-cut, dither terurut, hanya piksel yang berubah)
  *  - ZipWriter : ZIP tanpa kompresi untuk urutan gambar (PNG/JPG sudah terkompresi)
  *  - loadMediabunny() : memuat pustaka video lokal (vendor/mediabunny.min.js) saat dibutuhkan
+ *  - fixMp4Timescale() : menaikkan timescale MP4 agar terbaca galeri dan WhatsApp di Android
  * Tidak menyentuh DOM selain loadMediabunny, sehingga bagian lainnya bisa diuji di Node.
  */
 (function (root) {
@@ -87,6 +88,74 @@
       });
     }
     return libPromise;
+  }
+
+  /* ═══════════════════════════════════════════════
+     PERBAIKAN TIMESCALE MP4
+     ═══════════════════════════════════════════════ */
+
+  const MIN_TIMESCALE = 15360;
+
+  /**
+   * Naikkan timescale media MP4 yang terlalu kecil. Mediabunny memakai timescale = FPS (mis. 60), dan beberapa
+   * pembaca Android (galeri, WhatsApp) menganggap berkas seperti itu rusak (durasi ±0.02 dtk, "format tidak didukung").
+   * Semua waktu sampel dikalikan faktor yang sama, jadi durasi dan urutan frame tidak berubah dan ukuran berkas tetap.
+   * Buffer diubah di tempat dan dikembalikan; struktur yang tidak dikenal dibiarkan apa adanya.
+   */
+  function fixMp4Timescale(buf) {
+    try {
+      const u8 = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+      const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+      const tag = o => String.fromCharCode(u8[o], u8[o + 1], u8[o + 2], u8[o + 3]);
+      const NESTED = ['moov', 'trak', 'mdia', 'minf', 'stbl', 'edts'];
+      const tracks = [];
+
+      const walk = (start, end, track) => {
+        for (let o = start; o + 8 <= end;) {
+          let size = dv.getUint32(o), head = 8;
+          if (size === 1) { size = Number(dv.getBigUint64(o + 8)); head = 16; } else if (size === 0) size = end - o;
+          if (size < head || o + size > end) return;
+          const t = tag(o + 4), body = o + head;
+          let cur = track;
+          if (t === 'trak') { cur = {}; tracks.push(cur); }
+          if (cur && (t === 'mdhd' || t === 'stts' || t === 'ctts' || t === 'elst')) cur[t] = body;
+          if (NESTED.includes(t)) walk(body, o + size, t === 'moov' ? null : cur);
+          o += size;
+        }
+      };
+      walk(0, u8.length, null);
+
+      for (const tr of tracks) {
+        const { mdhd, stts, ctts, elst } = tr;
+        if (mdhd == null || stts == null || u8[mdhd] !== 0 || u8[stts] !== 0) continue;   // hanya versi 0
+        if ((ctts != null && u8[ctts] > 1) || (elst != null && u8[elst] !== 0)) continue;
+        const ts = dv.getUint32(mdhd + 12), dur = dv.getUint32(mdhd + 16);
+        if (ts < 1 || ts >= 600) continue;                                // audio dan timescale wajar tidak disentuh
+        const k = Math.ceil(MIN_TIMESCALE / ts);
+        if (dur * k > 0xFFFFFFFF) continue;
+        dv.setUint32(mdhd + 12, ts * k);
+        dv.setUint32(mdhd + 16, dur * k);
+        for (let i = 0, n = dv.getUint32(stts + 4); i < n; i++) {
+          const at = stts + 8 + i * 8;                                    // (jumlah sampel, lama per sampel)
+          dv.setUint32(at + 4, dv.getUint32(at + 4) * k);
+        }
+        if (ctts != null) {
+          for (let i = 0, n = dv.getUint32(ctts + 4); i < n; i++) {
+            const at = ctts + 8 + i * 8;                                  // (jumlah sampel, offset komposisi)
+            if (u8[ctts] === 1) dv.setInt32(at + 4, dv.getInt32(at + 4) * k);
+            else dv.setUint32(at + 4, dv.getUint32(at + 4) * k);
+          }
+        }
+        if (elst != null) {
+          for (let i = 0, n = dv.getUint32(elst + 4); i < n; i++) {
+            const at = elst + 8 + i * 12;                                 // (durasi segmen, media_time, laju)
+            const mt = dv.getInt32(at + 4);
+            if (mt > 0) dv.setInt32(at + 4, mt * k);
+          }
+        }
+      }
+    } catch (e) { /* biarkan berkas apa adanya */ }
+    return buf;
   }
 
   /* ═══════════════════════════════════════════════
@@ -406,6 +475,6 @@
   root.HidzKit = {
     RES_PRESETS, FPS_PRESETS, GIF_MAX_FPS, VIDEO_MAX_FPS, QUALITY,
     even, sizeForShort, videoBitrate, estimateBytes, gifProblem, framesProblem,
-    loadMediabunny, GifPalette, GifWriter, ZipWriter, crc32,
+    loadMediabunny, fixMp4Timescale, GifPalette, GifWriter, ZipWriter, crc32,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

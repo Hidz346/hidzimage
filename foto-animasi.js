@@ -22,6 +22,13 @@
   const SAMPLE_PHOTOS = 24;                   // jumlah foto contoh untuk palet GIF
   const SLIDE_OVERSCAN = 1.3;                 // sisi terpanjang foto kerja = hasil × ini (ruang untuk zoom, tetap tajam)
   const FORMAT_LABEL = { mp4: 'MP4', webm: 'WEBM', gif: 'GIF', zip: 'GAMBAR' };
+  const FULL_HD_AREA = 1920 * 1088;           // di atas ini sebagian HP, galeri, dan WhatsApp bermasalah dengan video
+  /* Tujuan upload: MP4 H.264, sisi pendek 1080, 30 FPS, kualitas tinggi; hanya rasio yang berbeda. */
+  const TARGETS = [
+    { key: 'tiktok', label: 'TIKTOK · REELS', sub: '9:16 · 1080×1920', ratio: '9:16' },
+    { key: 'feed',   label: 'IG FEED',        sub: '4:5 · 1080×1350',  ratio: '4:5' },
+    { key: 'hd',     label: 'FULL HD',        sub: '16:9 · 1920×1080', ratio: '16:9' },
+  ];
   const isVid = f => f === 'mp4' || f === 'webm';
   const fmtFps = n => String(Math.round(n * 100) / 100);
   const fmtDur = sec => {
@@ -188,6 +195,7 @@
       if (n === 1 && A.trans !== 'cut') p.info.push('Satu foto: transisi tidak dipakai.');
       if (gif && (p.frames > 400 || p.dur > 15)) p.warn.push('GIF cenderung berukuran besar. Untuk durasi panjang, MP4 jauh lebih hemat.');
       if (gif && p.fps > 33) p.info.push('Browser tertentu memutar GIF di atas 33 FPS sedikit lebih lambat; pakai MP4 bila perlu persis.');
+      if (vid && w * h > FULL_HD_AREA) p.warn.push('Di atas Full HD (1920×1080): sebagian HP, galeri, dan WhatsApp bisa menolak atau mengompres ulang lebih keras. Untuk dibagikan, pilih TUJUAN UPLOAD.');
     }
     if (vid && !p.bad.length) {
       p.bps = K.videoBitrate({ w, h, fps, quality: A.quality });
@@ -221,6 +229,10 @@
     const p = plan(), fmt = A.format, vid = isVid(fmt);
     document.querySelectorAll('#aFormat .fmt-card').forEach(b => b.classList.toggle('active', b.dataset.f === fmt));
 
+    pickRow($a('aTarget'), TARGETS.map(t => ({
+      key: t.key, label: t.label, sub: t.sub,
+      active: fmt === 'mp4' && A.ratio === t.ratio && A.res === 1080 && A.fps === 30 && A.quality === 'tinggi',
+    })), applyTarget);
     pickRow($a('aHold'), HOLDS.map(s => ({ key: s, label: s + ' dtk', active: A.hold === s })), v => { A.hold = v; refresh(); });
     pickRow($a('aRatio'), RATIOS.map(([k, l]) => ({ key: k, label: l, active: A.ratio === k })), v => { A.ratio = v; refresh(); });
     const limit = vid ? MAX_VIDEO_SIDE : MAX_IMG_SIDE;
@@ -289,6 +301,16 @@
     if (fromGif && A.auto.fps && !A.touched.fps) { A.fps = 30; A.auto.fps = false; }
     if (toGif && typeof A.fps === 'number' && A.fps > K.GIF_MAX_FPS) A.fps = K.GIF_MAX_FPS;
     probeFail = '';
+  }
+
+  /** Terapkan tujuan upload: format, rasio, resolusi, FPS, dan kualitas sekaligus; semuanya tetap bisa diubah lagi. */
+  function applyTarget(key) {
+    const t = TARGETS.find(x => x.key === key);
+    if (!t) return;
+    applyFormat('mp4');
+    A.ratio = t.ratio; A.res = 1080; A.fps = 30; A.quality = 'tinggi';
+    A.touched.res = A.touched.fps = true; A.auto.res = A.auto.fps = false;
+    refresh();
   }
 
   document.querySelectorAll('#aFormat .fmt-card').forEach(b => b.addEventListener('click', () => { applyFormat(b.dataset.f); refresh(); }));
@@ -448,6 +470,7 @@
         await output.finalize();
         const buf = output.target.buffer;
         if (!buf || !buf.byteLength) throw new Error('Hasil video kosong. Coba lagi.');
+        if (p.fmt === 'mp4') K.fixMp4Timescale(buf);
         return new Blob([buf], { type: p.fmt === 'mp4' ? 'video/mp4' : 'video/webm' });
       } catch (err) {
         try { await output.cancel(); } catch (e) { /* abaikan */ }

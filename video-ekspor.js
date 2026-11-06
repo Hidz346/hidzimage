@@ -12,6 +12,13 @@
   const MAX_GIF_SIDE = 4096;        // batas sisi terpanjang GIF / urutan gambar (batas aman kanvas di HP)
   const SAMPLE_FRAMES = 24;         // jumlah frame contoh untuk menyusun palet GIF
   const fmtFps = n => String(Math.round(n * 100) / 100);
+  const FULL_HD_AREA = 1920 * 1088;     // di atas ini sebagian HP, galeri, dan WhatsApp bermasalah dengan video
+  /* Tujuan upload: MP4 H.264, kualitas tinggi, FPS asli (maksimal 30); hanya ukuran yang berbeda. */
+  const TARGETS = [
+    { key: 'tiktok', label: 'TIKTOK · REELS', sub: '9:16 · 1080×1920', w: 1080, h: 1920 },
+    { key: 'feed',   label: 'IG FEED',        sub: '4:5 · 1080×1350',  w: 1080, h: 1350 },
+    { key: 'hd',     label: 'FULL HD',        sub: '16:9 · 1920×1080', w: 1920, h: 1080 },
+  ];
 
   /* Pilihan pengguna di Studio Ekspor */
   const X = {
@@ -98,6 +105,9 @@
     if (!canUseWebCodecs()) bad.push('Browser ini belum mendukung WebCodecs, jadi Studio Ekspor belum bisa dipakai. Gunakan Chrome, Edge, atau Safari terbaru.');
 
     if (!bad.length) {
+      if (vid && w * h > FULL_HD_AREA) {
+        warn.push('Di atas Full HD (1920×1080): sebagian HP, galeri, dan WhatsApp bisa menolak atau mengompres ulang lebih keras. Untuk dibagikan, pilih TUJUAN UPLOAD.');
+      }
       if (w * h > state.vw * state.vh * 1.02) {
         warn.push(`Lebih besar dari video asli (${state.vw}×${state.vh}): ukuran diperbesar, detail tidak bertambah. Untuk hasil lebih tajam, jalankan HD ENHANCE dulu lalu LANJUT EDIT HASIL.`);
       }
@@ -177,6 +187,27 @@
     $('xCustom').classList.toggle('hidden', X.res !== 'custom');
   }
 
+  function paintTargets() {
+    pickRow($('xTarget'), TARGETS.map(t => ({
+      key: t.key, label: t.label, sub: t.sub,
+      active: X.format === 'mp4' && X.res === 'custom' && +X.w === t.w && +X.h === t.h && X.quality === 'tinggi',
+    })), applyTarget);
+  }
+
+  /** Terapkan tujuan upload: format, ukuran, FPS, dan kualitas sekaligus; semuanya tetap bisa diubah lagi. */
+  function applyTarget(key) {
+    const t = TARGETS.find(x => x.key === key);
+    if (!t) return;
+    applyFormat('mp4');
+    X.res = 'custom'; X.w = t.w; X.h = t.h; X.manualW = X.manualH = true;
+    X.fps = srcFps() > 30.1 ? 30 : 'src';
+    X.quality = 'tinggi';
+    X.touched.res = X.touched.fps = true; X.auto.res = X.auto.fps = false;
+    $('xW').value = X.w; $('xH').value = X.h;
+    probeFail = '';
+    refresh();
+  }
+
   function fpsItems(current, includeCustom, cap) {
     const items = [{ key: 'src', label: 'ASLI', sub: state.file ? fmtFps(Math.min(cap, srcFps())) + ' fps' : '', active: current === 'src' }];
     K.FPS_PRESETS.forEach(f => items.push({ key: f, label: String(f), active: current === f, disabled: f > cap }));
@@ -219,6 +250,7 @@
     const fmt = X.format, vid = isVideoFmt(fmt);
 
     document.querySelectorAll('#xFormat .fmt-card').forEach(b => b.classList.toggle('active', b.dataset.f === fmt));
+    paintTargets();
     paintResolution(p);
     paintFps();
     $('xQualityWrap').classList.toggle('hidden', !vid);
